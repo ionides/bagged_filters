@@ -1,0 +1,2217 @@
+\documentclass[12pt]{article}
+
+%%% JASA. Attention Mac Users. The latest version of the pdfTex compiler for Mac (pdfTeX-1.40.11) outputs files not currently supported by ScholarOne Manuscripts. To resolve this and have a PDF file that will convert properly, the PDF file will need to be distilled to Adobe version 1.4 or earlier. To create a PDF file that uploads correctly, place the command \pdfminorversion=4 in the preamble (before the begin{document}) of your LaTeX file and run pdfLaTeX again.
+
+\pdfminorversion=4
+ 
+<<debug,echo=F>>=
+run_level <- 2
+#run_level <- "jasa-sept-2020"
+#run_level <- 2
+bm_run_level <- run_level
+#mscale_run_level <- run_level
+mscale_run_level <- 3
+slice_run_level <- run_level
+
+if(run_level=="jasa-sept-2020"){  
+#### values used for jasa submission, sept 2020  
+  bm_run_level <- 4
+  mscale_run_level <- 5
+  slice_run_level <- 3
+}
+
+@
+
+%%% IN THE FINAL VERSION, THE INPUT HEADER FILE SHOULD BE PASTED IN.
+\input{theorems.tex}
+\input{header-ms.tex}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{enumerate}
+\usepackage{natbib}
+\usepackage{url} % not crucial - just used below for the URL 
+
+%\pdfminorversion=4
+% NOTE: To produce blinded version, replace "0" with "1" below.
+\newcommand{\blind}{1}
+
+\newcommand\rewrite[1]{{\textcolor{red}{#1}}}
+
+\usepackage{fullpage}
+\addtolength{\textheight}{-.3in}%
+
+\bibliographystyle{apalike}
+
+
+% to run code from R: knitr::purl("ms.Rnw") ; source("ms.R")
+
+<<packages,include=F,cache=F>>=
+library("ggplot2")
+library("spatPomp")
+library(doParallel)
+library(doRNG)
+
+# 40 cores for doob, 8 for ito
+doob_cores <- 40
+gl_cores <- 36
+
+cores <-  as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset=NA))
+if(is.na(cores)) cores <- detectCores()  
+registerDoParallel(cores)
+
+<<set-opts,include=F,cache=F>>=
+
+options(
+        scipen=2,
+        help_type="html",
+        stringsAsFactors=FALSE,
+        prompt="R> ",
+        continue="+  ",
+        width=70,
+        useFancyQuotes=FALSE,
+        reindent.spaces=2,
+        xtable.comment=FALSE
+        )
+@
+
+<<knitr-opts,include=F,cache=F,purl=F>>=
+library("knitr")
+opts_knit$set(concordance=TRUE)
+opts_chunk$set(
+    progress=TRUE,prompt=TRUE,highlight=FALSE,
+    tidy=TRUE,
+    tidy.opts=list(
+        keep.blank.line=FALSE
+    ),
+    comment="",
+    warning=FALSE,
+    message=FALSE,
+    error=TRUE,
+    echo=TRUE,
+    cache=FALSE,
+    strip.white=TRUE,
+    results="markup",
+    background="#FFFFFF00",
+    size="normalsize",
+    fig.path="figure/",
+    fig.lp="fig:",
+    fig.align="left",
+    fig.show="asis",
+#    dpi=300,
+    dev="pdf",
+    dev.args=list(
+        bg="transparent",
+        pointsize=9
+    )
+)
+
+myround<- function (x, digits = 1) {
+  # taken from the broman package
+  if (digits < 1) 
+    stop("This is intended for the case digits >= 1.")
+  if (length(digits) > 1) {
+    digits <- digits[1]
+    warning("Using only digits[1]")
+  }
+  tmp <- sprintf(paste("%.", digits, "f", sep = ""), x)
+  zero <- paste0("0.", paste(rep("0", digits), collapse = ""))
+  tmp[tmp == paste0("-", zero)] <- zero
+  tmp
+}
+
+@
+
+
+% \date{This manuscript was compiled on \today}
+
+\begin{document}
+
+\def\spacingset#1{\renewcommand{\baselinestretch}%
+{#1}\small\normalsize} \spacingset{1}
+
+
+\date{}
+
+\if1\blind
+{
+  \title{\vspace{-10mm}\bf \mytitle}
+  \author{Edward L. Ionides\thanks{This work was supported by National Science Foundation grants DMS-1761603 and DMS-1646108, and National Institutes of Health grants 1-U54-GM111274 and 1-U01-GM110712.}\hspace{.2cm}\\
+    Department of Statistics, University of Michigan\\
+    Kidus Asfaw\\
+    Department of Statistics, University of Michigan\\
+    %and \\
+    Joonha Park\\
+    Department of Mathematics \& Statistics, Boston University\\
+    %and\\
+    Aaron A. King\\
+    Department of Ecology \& Evolutionary Biology, University of Michigan
+}
+  \maketitle
+} \fi
+
+\if0\blind
+{
+  \bigskip
+  \bigskip
+  \bigskip
+  \begin{center}
+    {\LARGE\bf \mytitle}
+\end{center}
+  \medskip
+} \fi
+
+
+\vspace{-10mm}
+
+\begin{abstract}
+Bagging (i.e., bootstrap aggregating) involves combining an ensemble of bootstrap estimators.
+The particle filter, also known as sequential Monte Carlo or the bootstrap filter, is a widely used algorithm for estimating the latent states or likelihood of a partially observed Markov process.
+Our bagged filter (BF) methodology combines an ensemble of particle filters, using spatiotemporally localized weights to select successful filters at each point of space and time.
+In some situations, BF methodology can theoretically beat a curse of dimensionality affecting standard particle filters;
+in others, BF fails in theory to beat the curse, but nevertheless evinces practical advantages.
+Our focus is on evaluation of the likelihood function, though BF theory and methodology are also pertinent to latent state estimation.
+Applications suited to BF methodology include spatiotemporal analysis of epidemiological and ecological systems.
+We show that BF methodology can out-perform an ensemble Kalman filter on a coupled population dynamics model arising in the epidemiology of infectious disease.
+We also find that a block particle filter performs well on this task, though the bagged filter respects smoothness and conservation laws that a block particle filter can violate.
+
+\end{abstract}
+
+\noindent%
+{\it Keywords:}  Particle filter; Sequential Monte Carlo; Markov process; Population dynamics
+
+%\vfill
+\pagebreak
+
+\spacingset{1.45} % DON'T change the spacing!
+
+
+\section{Introduction}
+
+Particle filter (PF) algorithms are a widespread tool for inference on nonlinear partially observed dynamic systems \citep{doucet01,doucet11,breto09,ionides15}.
+Modern particle filtering traces back to \citet{gordon93} where the algorithm was called the {\it bootstrap filter}. 
+Standard PF methods suffer from a curse of dimensionality (COD), defined as an exponential increase in computational demands as the problem size grows, which limits its applicability to spatiotemporal systems \citep{bengtsson08,snyder15,rebeschini15}.
+The COD presents empirically as numerical instability of the Monte Carlo algorithm for attainable numbers of particles.
+Bootstrap aggregating (i.e., bagging) is a methodology to improve numerically unstable estimators by combining an ensemble of replicated bootstrap calculations \citep{breiman96}.
+We consider algorithms combining an ensemble of replicated particle filters, and we use the name {\it bagged filter}.
+The task of each bootstrap replicate is to provide some predictive skill at some points in space and time.
+The bagged filter then proceeds to combine these replicates, assessing which replicates are reliable predictors at a given spatiotemporal location. 
+
+Much previous research has investigated scalable approaches to filtering and inference with applications to spatiotemporal systems.
+Our bagged filters are in the class of {\it plug-and-play} algorithms, meaning that they require as input a simulator for the latent dynamic process but not an evaluator of transition probabilities \citep{breto09,he10}.
+This simulation-based approach, also known as {\it likelihood-free} \citep{brehmer20} or {\it equation-free} \citep{kevrekidis09}, facilitates application to a wide class of models.
+The ensemble Kalman filter \citep{evensen96,katzfuss19} is a widely used plug-and-play method which uses simulations to parameterize a Gaussian-inspired filtering rule.
+Another plug-and-play approach to combat the COD is the block particle filter \citep{rebeschini15,ng02}.
+Both ensemble Kalman filter and block particle filter methods construct trajectories that can violate smoothness and conservation properties of the dynamic model.
+By contrast, our bagged filters are built using valid trajectories of the dynamic model, but make localization approximations when comparing these trajectories to data.
+It is an empirical question how these strengths and weaknesses play out for a particular data analysis.
+The plug-and-play property of an algorithm makes a general numerical implementation possible: we provide a software environment within which alternative methods can be applied.
+
+The replicated stochastic trajectories in a bagged filter form an ensemble of representations of the dynamic system.
+Unlike ensemble Kalman filters \citep{lei10} the bagged replicates are independent in a Monte Carlo sense.
+Bagged filters therefore bear some resemblance to \textit{poor man's ensemble} forecasting methodology in which a collection of independently constructed forecasts is generated using different models and methods \citep{ebert01}. 
+Poor man's ensembles have sometimes been found to have greater forecasting skill than any one forecast \citep{leutbecher08,palmer02,chandler13}.
+One explanation for this phenomenon is that even a hypothetically perfect model cannot filter and forecast well using methodology afflicted by the COD.  
+We show that bagged filter methodology can relieve this limitation.
+From this perspective, the independence of the forecasts in the poor man's ensemble, rather than the diversity of model structures, may be the key to its success.
+
+
+In a basic bagged filter, each replicate simply simulates a realization of the latent process model, corresponding to a degenerate instance of PF with only a single particle.
+We call this the unadapted bagged filter ({\UBF}) since each replicate in the ensemble does not track the data.
+While formally beating the COD under a weak mixing assumption, {\UBF} can have poor numerical behavior if a very large number of replicates are needed to reach this happy asymptotic limit.
+Our empirical results show that {\UBF} may indeed be a useful algorithm in some situations.
+More importantly, however, it provides a route to two other algorithms, which we call the adapted bagged filter (\ABF) and adapted bagged filter with intermediate resampling (\ABFIR).
+{\ABF} and {\ABFIR} carry out some resampling on each replicate and therefore enable each replicate to track the data, in a weak sense, while resisting the COD.
+This comes at a price: {\ABF} no longer asymptotically beats COD, and {\ABFIR} does so only under restrictive conditions.
+However, we demonstrate useful behavior for these algorithms on finite samples.
+
+
+To set up notation, we suppose the latent process is comprised of a collection of units, labeled $\{1,2,\dots,\Unit\}$ which we write as $1\mycolon\Unit$. 
+An unobserved, latent Markov process at a discrete sequence of observation times is written as $\{\myvec{X}_{\time},\time\in 0\mycolon\Time\}$, with $\myvec{X}_{\time}=X_{1:\Unit,\time}$ taking values in $\Xspace^\Unit$.
+The initial value $\myvec{X}_{0}$ may be stochastic or deterministic.
+Observations are made on each unit, modeled by an observable process $\{\myvec{Y}_{\time}=Y_{1:\Unit,\time},\time\in 1\mycolon\Time\}$ which takes values in $\Yspace^\Unit$.
+Observations are modeled as being conditionally independent given the latent process.
+The conditional independence of measurements applies over both space and time, so $Y_{\unit\comma\time}$ is conditionally independent of
+$\big\{
+  X_{\altUnit\comma\altTime},
+  Y_{\altUnit\comma\altTime},
+  (\altUnit\comma\altTime)\neq(\unit\comma\time)
+\big\}$
+given $X_{\unit\comma\time}$.
+This unit structure for the observation process is not necessary for all that follows (see Sec.~\SuppSecGeneralization).
+We suppose the existence of a joint density $f_{\myvec{X}_{0:\Time},\myvec{Y}_{1:\Time}}$  of $\{X_{1:\Unit,\time}\}$ and $\{Y_{1:\Unit,\time}\}$ with respect to some appropriate measure.
+We use the same subscript notation to denote other marginal and conditional densities.
+The data are ${y}_{\unit\comma\time}$ for spatial unit $\unit$ at time $\time$. 
+For a fixed value of $\Unit$, this model fits into the partially observed Markov process (POMP) framework \citep{breto09}, also known as a state space model or hidden Markov model.
+Spatiotemporal POMP models are characterized by a latent Markov process with dimension proportional to $\Unit$.
+We use the term {SpatPOMP} to describe POMP models indexed by $\unit$ as well as $\time$.
+In accordance with the spatial interpretation of the units $\unit\in 1\mycolon\Unit$, we may suppose that units sufficiently distant in some sense approach independence, a phenomenon called {\it weak coupling}. 
+It is worth pointing out that inference techniques designed for SpatPOMPs are also relevant in high-dimensional stochastic dynamic systems where $\unit$ does not index spatial locations.
+In the following, we use the ordering on the set of observations corresponding to their labels $1\mycolon\Unit$ to define the set of observations preceding unit $\unit$ at time $\time$ as
+\begin{equation}\label{eq:setA}
+A_{\unit\comma\time}=\big\{(\tilde\unit,\tilde\time): 1 \leq \tilde\time<\time \mbox{ or } (\tilde\time=\time \mbox{ and } \tilde\unit <\unit)\big\}.
+\end{equation}
+The ordering of the spatial locations in \myeqref{eq:setA} might seem artificial, and indeed densities such as
+$f_{X_{\unit\comma\time}|X_{A_{\unit\comma\time}}}$ will frequently be hard to compute or simulate from.
+However, the algorithms we study do not carry out such computations, but only evaluate the measurement model on these neighborhoods.
+To represent weak coupling, we suppose there is a neighborhood $B_{\unit\comma\time}\subset A_{\unit\comma\time}$ such that the latent process on 
+$A_{\unit\comma\time} \setminus B_{\unit\comma\time}$ 
+is approximately conditionally independent of $X_{\unit\comma\time}$ given data on $B_{\unit\comma\time}$. 
+
+The inputs for the {\UBF}, {\ABF} and {\ABFIR} are listed in Table~1.
+The plug-and-play property is evident since all three algorithms require as input a simulator for the latent dynamic process but not an evaluator of transition probabilities.
+Our primary interest is in the estimation of the log likelihood for the data given the model, $\loglik=\log f_{\myvec{Y}_{1:\Time}}(\data{\myvec{y}}_{1:\Time})$, which is of fundamental importance in both Bayesian and non-Bayesian statistical inference.
+Monte Carlo estimates of the log likelihood underpin modern methods for full-information statistical inference on partially observed dynamic systems \citep{andrieu10,ionides15,ionides17}.
+Filtering theory ties together the three tasks of likelihood evaluation, forecasting, and inferring latent dynamic variables \citep{crisan11}.
+Successful likelihood evaluation is therefore closely related to success at forecasting and latent process reconstruction.
+
+The pseudocodes for the algorithms that follow will adopt a convention that implicit loops are carried out over all free indices.
+For example, the construction of $w^P_{\unit,\time,\rep}$ in {\UBF} has an implicit loop over $\unit$, $\time$ and $\rep$. 
+The construction of $w^P_{\unit,\time,\rep,\np}$ in {\ABF} has an implicit loop over $\unit$, $\rep$ and $\np$ but not over $\time$ since $\time$ is already defined in an explicit loop and is therefore not a free index.
+Table~1 lists the ranges of the implicit loops for all following algorithms.
+
+
+\begin{center}
+\noindent\begin{tabular}{l}
+\hline
+\inputSpace {\bf Table 1. Bagged filter inputs, outputs and implicit loops.}\\
+\hline
+\inputSpace {\bf input:}
+\\
+simulator for $f_{\myvec{X}_0}(\myvec{x}_0)$ and $f_{\myvec{X}_{\time}|\myvec{X}_{\time-1}}(\myvec{x}_{\time}\given \myvec{x}_{\time-1})$\\
+    evaluator for $f_{{Y}_{\unit\comma\time}|{X}_{\unit\comma\time}}({y}_{\unit\comma\time}\given {x}_{\unit\comma\time})$\\
+    number of replicates, ${\Rep}$\\
+    neighborhood structure, $B_{\unit\comma\time}$\\
+    data, $\data{\myvec{y}}_{1:\Time}$\\
+{\ABF} and {\ABFIR}:    particles per replicate,  $\Np$\\
+{\ABFIR}: number of intermediate timesteps, $\Ninter$ \\
+{\ABFIR}: measurement variance parameterizations, ${\VtoTheta}_{\unit\comma\time}$ and ${\thetaToV}_{\unit\comma\time}$\\
+{\ABFIR}: approximate process and observation mean functions, $\myvec{\mu}$ and $h_{\unit\comma\time}$\\
+\inputSpace {\bf output:}\\
+  Log likelihood estimate, $\MC{\loglik}= \sum_{\time=1}^\Time\sum_{\unit=1}^\Unit \MC{\loglik}_{\unit\comma\time}$\\
+\inputSpace {\bf implicit loops:}\\
+$\; \unit \mbox{ in } \seq{1}{\Unit}$, 
+$\; \time \mbox{ in } \seq{1}{\Time}$, 
+$\; \rep \mbox{ in } \seq{1}{\Rep}$, 
+$\; \np \mbox{ in } \seq{1}{\Np}$
+%$\; \npgir \mbox{ in } \seq{1}{\Npgir}$
+\lastLineSpace \\
+\hline
+\end{tabular}
+\end{center}
+
+
+
+The~{\UBF} algorithm that follows amounts to a bagged filter with a single particle per replicate, with no weighting or resampling within each replicate.
+
+%%%%%%%%%%%%% ttttttttttttttttttttttttt
+
+\begin{center}
+\noindent\begin{tabular}{l}
+\hline
+\inputSpace {\bf {\UBF}. Unadapted bagged filter.}\\
+\hline
+%\inputSpace {\bf input:} From Table~1, with $\Np=1$ \\
+%\hline
+\firstLineSpace 
+Simulate $\myvec{X}^{\tif}_{0:\Time,\rep}\sim f_{\myvec{X}_{0:\Time}}(\myvec{x}_{0:\Time})$\\ 
+Measurement weights,
+$w^M_{\unit,\time,\rep}=f_{Y_{\unit,\time}|X_{\unit,\time}}(\data{y}_{\unit,\time}\given X^{\tif}_{\unit,\time,\rep})$
+\\
+Prediction weights, 
+$w^P_{\unit,\time,\rep}=\prod_{(\tilde \unit,\tilde n)\in B_{\unit,\time}}
+w^M_{\tilde\unit,\tilde n,\rep}$\\
+$\MC{\loglik}_{\unit,\time}= 
+\log\left(
+  \sum_{\rep=1}^\Rep w^M_{\unit,\time,\rep}w^P_{\unit,\time,\rep}
+\right)
+-\log\left(
+  \sum_{\rep=1}^\Rep w^P_{\unit,\time,\rep}
+\right)
+$
+\lastLineSpace
+\\
+\hline
+\end{tabular}
+\end{center}
+
+Theorem~\ref{thm:tif} shows that {\UBF} can beat COD. 
+However, an algorithm such as {\UBF}, which includes no resampling, will fail on long time series absent rapid spatiotemporal mixing, which allows simulated particles to remain relevant over the course of a long time series.
+It may in practice be necessary to select simulations consistent with the data, much as standard PF algorithms do.
+We look for approaches that build on the basic insight of {\UBF} while having superior practical performance.
+
+Whereas the full global filtering problem may be intractable via importance sampling methods, a version of this problem local in space and time may nevertheless be feasible.
+Drawing a sample from the conditional density, $f_{\myvec{X}_{\time}|\myvec{Y}_{\time},\myvec{X}_{\time-1}}$, is distinct from the filtering problem: we call this operation {\it adapted simulation}.
+For models where $\myvec{X}_{\time}$ is close to $\myvec{X}_{\time-1}$, adapted simulation requires a local calculation that may be much easier than the full filtering calculation.
+The following adapted bagged filter ({\ABF}) is constructed under a hypothesis that the adapted simulation problem is tractable.
+The adapted simulations are then reweighted in a neighborhood of each point in space and time to construct a local approximation to the filtering problem which leads to an estimate of the likelihood.
+
+%%%%%%%%%% aaaaaaaaaaaaaaaaa
+
+\begin{center}
+\noindent\begin{tabular}{l}
+\hline
+{\bf 
+{\ABF}. Adapted bagged filter.}\inputSpace\\
+\hline
+\firstLineSpace
+Initialize adapted simulation: $\myvec{X}^{\IF}_{0,\rep} \sim f_{\myvec{X}_0}(\myvec{x}_0)$
+\\
+For $\time\ \mathrm{in}\ \seq{1}{\Time}$
+\\
+\asp  Proposals:
+    $\myvec{X}_{\time,\rep,\np}^{\IP} \sim 
+    f_{\myvec{X}_{\time}|X_{1:\Unit,\time-1}} 
+    \big( \myvec{x}_{\time}\given \myvec{X}^{\IF}_{\time-1,\rep}\big)$
+\\
+\asp Measurement weights:
+  $w^M_{\unit,\time,\rep,\np} = 
+    f_{Y_{\unit,\time}|X_{\unit\comma\time}} 
+    \big (\data{y}_{\unit\comma\time}\given X^{\IP}_{\unit\comma\time,\rep,\np}\big)$
+\\
+\asp  Adapted resampling weights:
+  $w^{\IF}_{\time,\rep,\np} = 
+    \prod_{\unit=1}^{\Unit} w^M_{\unit,\time,\rep,\np}$
+\\
+\asp
+      Resampling:
+        $\prob\big[\resampleIndex({\rep})=a \big] = w^{\IF}_{\time,\rep,a}
+  \Big( 
+  \sum_{\altNp=1}^{\Np} w^{\IF}_{\time,\rep,\altNp}
+  \Big)^{-1}$
+\\
+\asp 
+$\myvec{X}^{\IF}_{\time,\rep} = \myvec{X}^{\IP}_{\time,\rep,r(\rep)}$ 
+\\
+\asp % Prediction weights:
+  $w^{\LCP}_{\unit,\time,\rep,\np}= \displaystyle
+  \prod_{\altTime=1}^{\time-1}
+  \Big[
+    \frac{1}{\Np}\sum_{k=1}^{\Np}
+    \hspace{1mm}
+       \prod_{\altUnit:(\altUnit,\altTime)\in B_{\unit,\time}} 
+    \hspace{-1mm}
+        w^M_{\altUnit,\altTime,\rep,k}
+  \Big] \prod_{\altUnit:(\altUnit,\time)\in B_{\unit,\time}} 
+    \hspace{-1mm}
+        w^M_{\altUnit,\time,\rep,\np}$
+\\
+End for
+\\
+$\displaystyle \MC{\loglik}_{\unit,\time}= 
+\log\Bigg(
+\frac{
+\sum_{\rep=1}^\Rep \sum_{\np=1}^{\Np} w^M_{\unit,\time,\rep,\np}w^P_{\unit,\time,\rep,\np}
+}{
+\sum_{\rep=1}^\Rep \sum_{\np=1}^{\Np} w^P_{\unit,\time,\rep,\np}
+}
+\Bigg)
+$
+\vspace{1mm}
+\\
+\hline
+\end{tabular}
+\end{center}
+
+
+
+
+In addition, we consider an algorithm which adds intermediate resampling to the adapted simulation replicates, and is therefore termed {\ABFIR}.
+Intermediate resampling involves assessing the satisfactory progress of particles toward the subsequent observation at a collection of times between observations.
+This is well defined when the latent system is a continuous time process $\{\myvec{X}(t)\}$ with observation times $t_{1:\Time}$ such that $\myvec{X}_\time=\myvec{X}(t_{\time})$.
+For a continuous time latent process model, intermediate resampling can have favorable scaling properties when the intermediate times 
+\begin{equation}
+\nonumber
+t_{\time-1}=t_{\time,0}<t_{\time,1}<\dots<t_{\time,\Ninter}=t_{\time} 
+\end{equation}
+scale with $\Ninter\approx \Unit$ \citep{park20}.
+In the case $\Ninter=1$, {\ABFIR} reduces to {\ABF}.
+Intermediate resampling was developed in the context of sequential Monte Carlo \citep{delmoral15,park20}; however, the same theory and methodology can be applied to the simpler and easier problem of adapted simulation. 
+{\ABFIR} employs a guide function to gauge the compatibility of each particle with future data.
+This is a generalization of the popular auxiliary particle filter \citep{pitt99}.
+The implementation in this pseudocode constructs the guide $g_{\time,\ninter,\rep,\np}$ using a simulated moment method proposed by \citet{park20}.
+The quantities  $\myvec{X}_{\time,\rep,\npgir}^{G}$, $V_{\unit,\time,\rep}$, $\myvec{\mu}^{\GP}_{\time,\ninter,\rep,\np}$, $V^{\mathrm{meas}}_{\unit,\time,\ninter,\rep,\np}$, $V^{\mathrm{proc}}_{\unit,\time,\ninter,\rep}$ and $\theta_{\unit,\time,\ninter,\rep,\np}$ constructed in {\ABFIR} are used only to construct $g_{\time,\ninter,\rep,\np}$.
+Heuristically, we use guide simulations to approximate the variance of the increment in each particle between time points, and we augment the measurement variance to account for both dynamic variability and measurement error.
+The guide function affects numerical performance of the algorithm but not its correctness: it enables a computationally convenient approximation to improve performance on the intractable target problem.
+Our guide function supposes the availability of a deterministic function approximating evolution of the mean of the latent process, written as
+\begin{equation}
+\nonumber
+\myvec{\mu}(\myvec{x},s,t)\approx \E\big[\myvec{X}(t) \given \myvec{X}(s)=\myvec{x}\big]. 
+\end{equation}
+Further, the guide requires that the measurement model has known conditional mean and variance as a function of the model parameter vector $\theta$, written as
+\begin{eqnarray}
+\nonumber
+h_{\unit\comma\time}(x_{\unit\comma\time})
+  &=& \E\big[Y_{\unit\comma\time}\given X_{\unit\comma\time}=x_{\unit\comma\time}\big]
+\\
+\nonumber
+{\thetaToV}_{\unit\comma\time}(x_{\unit\comma\time},\theta)
+  &=& \var\big(Y_{\unit\comma\time}\given X_{\unit\comma\time}=x_{\unit\comma\time} \giventh \theta\big)
+\end{eqnarray}
+Also required for {\ABFIR} is an inverse function ${\VtoTheta}_{\unit\comma\time}$ such that
+\begin{equation}
+\nonumber
+{\thetaToV}_{\unit\comma\time} \big( x_{\unit\comma\time},\VtoTheta_{\unit\comma\time}(V,x_{\unit\comma\time},\theta) \big) = V.
+\end{equation}
+
+%%%%%%%%%%%%%%%%% iiiiiiiiiiiiiiiiiii
+
+\begin{center}
+\noindent\begin{tabular}{l}
+\hline
+{\bf {\ABFIR}. Adapted bagged filter with intermediate resampling.} 
+\firstLineSpace \\  
+\vspace{0.4mm} \\
+\hline
+\firstLineSpace
+Initialize adapted simulation: $\myvec{X}^{\IF}_{0,\rep} \sim f_{\myvec{X}_0}(\myvec{x}_0)$
+\\
+For $\time\ \mathrm{in}\ \seq{1}{\Time}$
+\\
+\asp Guide simulations:
+    $\myvec{X}_{\time,\rep,\npgir}^{G} \sim 
+    f_{\myvec{X}_{\time}|\myvec{X}_{\time-1}} 
+    \big( \myvec{x}_{\time}\given \myvec{X}^{\IF}_{\time-1,\rep} \big)$
+\\
+\asp Guide sample variance: $V_{\unit,\time,\rep}=
+      \var \big\{
+        h_{\unit\comma\time}\big( {X}_{\unit,\time,\rep,\npgir}^{G}\big), \npgir \mbox{ in } \seq{1}{\Npgir}
+      \big\}$ 
+\\
+\asp $\guideFunc^{\resample}_{\time,0,\rep,\np}=1 \; \; $ and
+$\; \myvec{X}_{\time,0,\rep,\np}^{\GR}=\myvec{X}^{\IF}_{\time-1,\rep}$
+\\
+\asp For $\ninter  \,\, \mathrm{in} \,\, \seq{1}{\Ninter}$
+\\
+\asp\asp Intermediate proposals:
+        ${\myvec{X}}_{\time,\ninter,\rep,\np}^{\GP}
+          \sim {f}_{{\myvec{X}}_{\time,\ninter}|{\myvec{X}}_{\time,\ninter-1}}
+          \big(\mydot|{\myvec{X}}_{\time,\ninter-1,\rep,\np}^{\GR}\big)$ 
+\\
+\asp\asp 
+        $\myvec{\mu}^{\GP}_{\time,\ninter,\rep,\np} 
+           = \myvec{\mu}\big( \myvec{X}^{\GP}_{\time,\ninter,\rep,\np},t_{\time,\ninter},t_{\time} \big)$
+\\
+\asp\asp      %Measurement variance at skeleton: 
+        $V^{\mathrm{meas}}_{\unit,\time,\ninter,\rep,\np}
+           = \thetaToV_{\unit}(\theta,\mu^{\GP}_{\unit,\time,\ninter,\rep,\np})$
+\\
+\asp\asp  %Process variance:
+        $V^{\mathrm{proc}}_{\unit,\time,\ninter,\rep}
+          = V_{\unit,\time,\rep} \,
+          \big(t_{\time}-t_{\time,\ninter}\big) \Big/
+          \big(t_{\time}-t_{\time,0}\big)$ 
+\\
+\asp\asp
+%      Moment matching:
+        $\theta_{\unit,\time,\ninter,\rep,\np}= 
+          \VtoTheta_{\unit}\big(
+            V^{\mathrm{meas}}_{\unit,\time,\ninter,\rep,\np} + V^{\mathrm{proc}}_{\unit,\time,\ninter,\rep}, 
+            \, \mu^{\GP}_{\unit,\time,\ninter,\rep,\np}
+          \big)$
+\\
+\asp\asp  % Guide function: 
+        $
+\guideFunc_{\time,\ninter,\rep,\np}=
+          \prod_{\unit=1}^{\Unit}
+          f_{Y_{\unit,\time}|X_{\unit,\time}}
+          \big(
+            \data{y}_{\unit,\time}\given \mu^{\GP}_{\unit,\time,\ninter,\rep,\np} \giventh \theta_{\unit,\time,\ninter,\rep,\np} 
+          \big)$
+\\
+\asp\asp Guide weights:
+$w^G_{\time,\ninter,\rep,\np}= \guideFunc^{}_{\time,\ninter,\rep,\np}
+         \big/ \guideFunc^{\resample}_{\time,\ninter-1,\rep,\np}$
+\\
+\asp\asp
+      Resampling:
+        $\prob\big[\resampleIndex({\rep,\np})=a \big] = w^G_{\time,\ninter,\rep,a}
+\Big( \sum_{\altNp=1}^{\Np}w^G_{\time,\ninter,\rep,\altNp}\Big)^{-1}$
+\\
+\asp\asp
+        $\myvec{X}_{\time,\ninter,\rep,\np}^{\GR}=\myvec{X}_{\time,\ninter,\rep,\resampleIndex({\rep,\np})}^{\GP}\; \; $ and
+        $\; \guideFunc^{\resample}_{\time,\ninter,\rep,\np}= \guideFunc^{}_{\time,\ninter,\rep,\resampleIndex({\rep,\np})}\,$
+\\
+\asp
+End For
+\\
+\asp
+  Set $\myvec{X}^{\IF}_{\time,\rep}=\myvec{X}^{\GR}_{\time,\Ninter,\rep,1}$ 
+\\ 
+\asp Measurement weights:
+  $w^M_{\unit,\time,\rep,\npgir} = 
+    f_{Y_{\unit,\time}|X_{\unit,\time}} 
+    \big (\data{y}_{\unit,\time}\given X^{G}_{\unit,\time,\rep,\npgir} \big)$
+\\
+\asp % Prediction weights:
+  $w^{\LCP}_{\unit,\time,\rep,\npgir}= \displaystyle
+  \prod_{\altTime=1}^{\time-1}
+  \Big[
+    \frac{1}{\Npgir}\sum_{a=1}^{\Npgir}
+    \hspace{1mm}
+       \prod_{\altUnit:(\altUnit,\altTime)\in B_{\unit,\time}} 
+    \hspace{-1mm}
+        w^M_{\altUnit,\altTime,\rep,a}
+  \Big] \prod_{\altUnit:(\altUnit,\time)\in B_{\unit,\time}} 
+    \hspace{-1mm}
+        w^M_{\altUnit,\time,\rep,\npgir}$
+\\
+End for
+\\
+$\displaystyle \MC{\loglik}_{\unit,\time}= 
+\log\Bigg(
+\frac{
+\sum_{\rep=1}^\Rep \sum_{\npgir=1}^{\Npgir} w^M_{\unit,\time,\rep,\npgir}w^P_{\unit,\time,\rep,\npgir}
+}{
+\sum_{\rep=1}^\Rep \sum_{\npgir=1}^{\Npgir} w^P_{\unit,\time,\rep,\npgir}
+}
+\Bigg)
+$
+\vspace{1mm}
+\\
+\hline
+\end{tabular}
+\end{center}
+
+\clearpage
+
+This guide function is applicable to spatiotemporal versions of a broad range of population and compartment models used to model dynamic systems in ecology, epidemiology, and elsewhere. 
+Other guide functions could be developed and inserted into the {\ABFIR} algorithm, including other constructions considered by \citet{park20}.
+The number of particles for the guide simulations in {\ABFIR} does not necessarily have to be set equal to the number of intermediate proposals. 
+We make that simplification here since there is no compelling reason against it.
+
+
+One might wonder why it is appropriate to keep many particle representations at intermediate timesteps while resampling down to a single representative at each observation time.
+Part of the answer is that adaptive simulation can fail when one resamples down to a single particle too often (Sec.~\SuppSecAdaptedSimulation).
+
+
+%% llllllllllllllllllllllllllllllllll
+
+\section{Likelihood factorizations and their approximations}
+
+
+The approximation error for the algorithms we study here can be divided into two sources: a localization bias due to conditioning on a finite neighborhood, and Monte Carlo error. 
+The localization bias does not disappear in the limit as Monte Carlo effort increases.
+It does become small as the conditioning neighborhood increases, but the Monte Carlo effort grows exponentially in the size of this neighborhood.
+The class of problems for which these algorithms are useful are ones where a relatively small neighborhood is adequate. 
+Although the filtering inference is carried out using localization, the simulation of the process is carried out globally which avoids the introduction of additional boundary effects and ensures that the simulations comply with any constraint properties of the global process simulator.
+
+In this subsection, we consider the deterministic limit of each algorithm for infinite Monte Carlo effort.
+We explain why the {\UBF}, {\ABF} and {\ABFIR} algorithms approximately target the likelihood function, subject to suitable mixing behavior.
+Subsequently, we consider the scaling properties as Monte Carlo effort increases.
+We adopt a convention that densities involving $Y_{\unit\comma\time}$ are implicitly evaluated at the data, $\data{y}_{\unit\comma\time}$, and densities involving $X_{\unit\comma\time}$ are implicitly evaluated at $x_{\unit\comma\time}$ unless otherwise specified.
+We write $A^{+}_{\unit\comma\time}=A_{\unit\comma\time}\cup (\unit,\time)$ and $B^{+}_{\unit\comma\time}=B_{\unit\comma\time}\cup (\unit,\time)$.
+The essential ingredient in all the algorithms is a localization of the likelihood, which may be factorized sequentially as
+\begin{equation}
+%\label{eq:ordering}
+\nonumber
+f_{Y_{1:\Unit,1:\Time}}
+=
+\prod_{\time=1}^\Time\prod_{\unit=1}^\Unit 
+f_{Y_{\unit\comma\time}|Y_{A_{\unit\comma\time}}}
+= \prod_{\time=1}^\Time\prod_{\unit=1}^\Unit 
+\frac{f_{Y^{}_{A^+_{\unit\comma\time}}}}{f_{Y^{}_{A^{}_{\unit\comma\time}}}}.
+\end{equation}
+In particular, the approximations assume that the full history $A_{\unit\comma\time}$ can be well approximated by a neighborhood $B_{\unit\comma\time}\subset A_{\unit\comma\time}$.
+{\UBF} approximates $f_{Y_{\unit\comma\time}|Y_{A_{\unit\comma\time}}}$ by
+\begin{equation}
+\nonumber
+f_{Y_{\unit\comma\time}|Y_{B_{\unit\comma\time}}} 
+=
+\frac{f^{}_{Y^{}_{B^+_{\unit\comma\time}}}}{f^{}_{Y^{}_{B^{}_{\unit\comma\time}}}}
+=
+\frac{\int f_{Y_{B^+_{\unit\comma\time}}|X_{B^+_{\unit\comma\time}}} f_{X_{B^+_{\unit\comma\time}}}\, dx_{B^+_{\unit\comma\time}} }
+{\int f_{Y_{B_{\unit\comma\time}}|X_{B_{\unit\comma\time}}} f_{X_{B_{\unit\comma\time}}}\, dx_{B_{\unit\comma\time}} }.
+\end{equation}
+For $\unitTimeSubset \subset \seq{1}{\Unit}\times\seq{1}{\Time}$, define $\unitTimeSubset^{[m]}=\unitTimeSubset \cap \big(\UnitSet\times \{m\}\big)$.
+{\ABF} and {\ABFIR} build on the following identity, 
+\begin{equation}
+\nonumber
+%\label{eq:adapted}
+\hspace{-1mm}
+f_{Y_{A_{\unit\comma\time}}}{=} \int 
+\! \!
+f_{\myvec{X}_0} 
+\! \!
+\left[
+\prod_{\altAltTime=1}^{\time}
+f_{\myvec{X}_{\altAltTime}|\myvec{X}_{\altAltTime-1},\myvec{Y_{\altAltTime}}}
+f_{Y_{A^{[\altAltTime]}_{\unit\comma\time}}|\myvec{X}_{\altAltTime-1}}
+\right]
+\! d\myvec{x}_{0:\time},
+\end{equation}
+where
+$f_{\myvec{X}_{\altAltTime}|\myvec{X}_{\altAltTime-1},\myvec{Y}_{\altAltTime}}$ is called the adapted transition density.
+The adapted process (i.e., a stochastic process following the adapted transition density) can be interpreted as a one-step greedy procedure using the data to guide the latent process.
+Let 
+$g^{}_{\myvec{X}_{0:\Time},\myvec{X}^P_{1:\Time}}(\myvec{x}_{0:\Time},\myvec{x}^P_{1:\Time})$ 
+be the joint density of the adapted process and the proposal process, 
+\begin{eqnarray}
+\nonumber
+\hspace{-3mm} g^{}_{\myvec{X}_{0:\Time},\myvec{X}^P_{1:\Time}}(\myvec{x}_{0:\Time},\myvec{x}^P_{1:\Time})
+&=& f_{\myvec{X}_0}(\myvec{x}_0) \times 
+\\
+\label{eq:g}
+%\nonumber
+&& \hspace{-42mm}
+\prod_{\time=1}^{\Time} 
+f_{\myvec{X}_{\time}|\myvec{X}_{\time-1},\myvec{Y}_{\time}} 
+  \big( 
+    \myvec{x}_{\time} \given \myvec{x}_{\time-1},\data{\myvec{y}}_{\time} 
+  \big)
+\,\,
+f_{\myvec{X}_{\time}|\myvec{X}_{\time-1}}
+  \big(
+    \myvec{x}^P_{\time} \given \myvec{x}_{\time-1}
+  \big).
+\end{eqnarray}
+For 
+$\unitTimeSubset \subset \UnitSet\times 1{\mycolon}\Time$, 
+define 
+$\unitTimeSubset^{[m]}=\unitTimeSubset \cap \big(\UnitSet\times \{m\}\big)$ 
+and set
+\begin{equation}
+%\label{eq:h_S}
+\nonumber
+\adapted^{}_{\unitTimeSubset}
+%(\myvec{x}_{0:\Time})
+= 
+\prod_{m=1}^{\Time} f_{Y_{\unitTimeSubset^{[m]}}|\myvec{X}^{}_{m-1}} \big( \data{y}_{\unitTimeSubset^{[m]}} \given \myvec{X}^{}_{m-1} \big),
+\end{equation}
+using the convention that an empty density $f_{Y_{\emptyset}}$ evaluates to 1.
+Denoting $\E_{g}$ for expectation for $(\myvec{X}_{0:\Time},\myvec{X}^P_{1:\Time})$ having density $g_{\myvec{X}_{0:\Time},\myvec{X}^P_{1:\Time}}$, we have
+\begin{equation}
+%\label{eq:AB:ratio}
+\nonumber
+f_{Y_{\unit\comma\time}|Y_{A_{\unit\comma\time}}}
+= \frac{\E_{g}\big[\adapted^{}_{A^+_{\unit\comma\time}}\big] }{\E_{g}\big[\adapted^{}_{A^{}_{\unit\comma\time}}\big] }.
+\end{equation}
+Estimating this ratio by Monte Carlo sampling from $g$ is problematic due to the growing size of $A_{\unit\comma\time}$.
+Thus, {\ABF} and {\ABFIR} make a localized approximation,
+\begin{equation}
+\label{eq:AB:ratio2}
+ \frac{\E_{g}\big[\adapted^{}_{A^+_{\unit\comma\time}}\big] }{\E_{g}\big[\adapted^{}_{A^{}_{\unit\comma\time}}\big] }
+\approx \frac{\E_{g}\big[\adapted^{}_{B^+_{\unit\comma\time}}\big] }{\E_{g}\big[\adapted^{}_{B^{}_{\unit\comma\time}}\big] }.
+\end{equation}
+The conditional log likelihood estimate $\MC{\loglik}_{\unit\comma\time}$ in {\ABF} and {\ABFIR} come from replacing the expectations on the right hand side of \myeqref{eq:AB:ratio2} with averages over 
+Monte Carlo replicates of simulations from the adapted process. 
+To see that we expect the approximation in \myeqref{eq:AB:ratio2} to hold when dependence decays across spatiotemporal distance, we can write 
+%\begin{equation}
+\begin{eqnarray}
+\nonumber
+\adapted^{}_{A^{}_{\unit\comma\time}} 
+&=&
+ \adapted^{}_{B^{}_{\unit\comma\time}}  \hspace{1mm} \adapted^{}_{B^{c}_{\unit\comma\time}} 
+\\
+%\mbox{ and }
+\nonumber
+\adapted^{}_{A^+_{\unit\comma\time}}
+&=&
+ \adapted^{}_{B^{+}_{\unit\comma\time}}  \hspace{1mm}  \adapted^{}_{B^{c}_{\unit\comma\time}} ,
+%\end{equation}
+\end{eqnarray}
+where $B^c_{\unit\comma\time}$ is the complement of $B_{\unit\comma\time}$ in $A_{\unit\comma\time}$.
+As long as $\adapted_{B^c_{\unit\comma\time}}$ is approximately independent of $X_{\unit\comma\time}$ under $g$, this term approximately cancels in the numerator and denominator of the right hand side of \myeqref{eq:AB:ratio2}.
+
+\section{{\UBF} theory}
+
+For each pair $(\Unit,\Time)$ we suppose there is a dataset $\data{\myvec{y}}_{1:\Time}$ and a model $f_{\myvec{X}_{0:\Time},\myvec{Y}_{1:\Time}}$.
+We are interested in results that hold for all $(\Unit,\Time)$, but we do not require that the models for $(\Unit_1,\Time_1)\neq(\Unit_2,\Time_2)$ are nested in any way. 
+The following conditions impose requirements that distant regions of space-time behave similarly and have only weak dependence.
+The conditions are written non-asymptotically in terms of $\epsilon>0$ and $Q>1$ which are used to bound the asymptotic bias and variance in Theorem~\ref{thm:tif}.
+Stronger bounds are obtained when the conditions hold for small $\eone$, $\etwo$ and $Q$.
+
+\Ai  %% Assumption 1  Assumption~\ref{A1}
+
+\Aii  %% Assumption 2  Assumption~\ref{A1b}
+
+\Aiii   %% Assumption 3  Assumption~\ref{A2}
+
+\Aiv    %% Assumption 4  Assumption~\ref{A:unconditional:mix}
+
+
+The two mixing conditions in Assumptions~\ref{A1} and~\ref{A:unconditional:mix} are subtly different. 
+Assumption~\ref{A1} is a conditional mixing property, dependent on the data, whereas~\ref{A:unconditional:mix} asserts a form of unconditional mixing.
+Although both capture a similar concept of weak coupling, conditional and unconditional mixing properties do not readily imply one another.
+Assumption~\ref{A2} is a compactness condition of a type that has proved useful in the theory of particle filters despite the rarity of its holding exactly.
+Theorem~\ref{thm:tif} shows that these conditions let {\UBF} compute the likelihood with a Monte Carlo variance of order $\Unit\Time\Rep^{-1}$ with a bias of order $\Unit\Time\epsilon$.
+
+\TheoremI %% Theorem~\ref{thm:tif}
+
+\begin{proof}
+A complete proof is given in Sec.~\SuppSecThmI. 
+Briefly, the assumptions imply a multivariate central limit theorem for $\{\MC{\loglik}_{\unit\comma\time}, (\unit,\time)\in \UnitSet{\times}\ObsTimeSet\}$ as $\Rep\to\infty$.
+The limiting variances and covariances are uniformly bounded, using Assumptions~\ref{A1b} and~\ref{A2}. 
+Assumption~\ref{A1} provides a uniform bound on the discrepancy between ${\loglik}_{\unit\comma\time}$ and mean of the Gaussian limit.
+This is enough to derive \myeqref{th1:lik:bound}.
+Assumption~\ref{A:unconditional:mix} gives a stronger bound on covariances between sufficiently distant units, leading to \myeqref{th1:lik:bound2}.
+\end{proof}
+
+\section{{\ABFIR} theory}
+
+Since {\ABF} is {\ABFIR} with $\Ninter=1$, we focus attention on {\ABFIR}.
+At a conceptual level, the localized likelihood estimate in {\ABFIR} has the same structure as its {\UBF} counterpart.
+However, {\ABFIR} additionally requires the capability to satisfactorily implement adapted simulation.
+Adapted simulation is a local calculation, making it an easier task than the global operation of filtering.
+Nevertheless, adapted simulation via importance sampling is vulnerable to COD for sufficiently large values of $\Unit$.
+For a continuous time model, the use of $\Ninter>1$ is motivated by a result that guided intermediate resampling can reduce, or even remove, the COD in the context of a particle filtering algorithm \cite{park20}.
+Assumptions~\ref{B1}--\ref{B:unconditional:mix} are analogous to ~\ref{A1}--\ref{A:unconditional:mix} and are non-asymptotic assumptions involving $\ethree>0$, $\efourA>0$ and $Q>1$ which are required to hold uniformly over space and time.
+Assumption~\ref{B:temporal:mix}--\ref{B:XG_XA_ind} control the Monte~Carlo error arising from adapted simulation.
+~\ref{B:temporal:mix} is a stability property which asserts that the effect of the latent process on the future of the adapted process decays over time. 
+Assumption~\ref{B:girf} is a non-asymptotic bound on Monte~Carlo error for a single step of adapted simulation.
+The scaling of the constant $\BvConstant$ with  $\Unit$,  $\Time$ and $\Ninter$ in  Assumption~\ref{B:girf} has been studied by \citet{park20}, where it was established that setting $\Ninter=\Unit$ can lead to $\BvConstant$ being constant, when using an ideal guide function, or slowly growing with $\Unit$ otherwise.
+The $\efive^{-3}$ error rate in Assumption~\ref{B:girf} follows from balancing the two sources of error defined in the statement of Theorem~2 of \citet{park20}.
+Assumption~\ref{B:XG_XA_ind} can be guaranteed by the construction of the algorithm, if independently generated Monte~Carlo random variables are used for building the guide function and the one-step prediction particles.
+The asymptotic limit in Theorem~\ref{thm:abf} arises as the number of replicates increases.
+
+\Bi %% Assumption~\ref{B1}
+
+\Bii %% Assumption~\ref{B1b}
+
+\Biii %% Assumption~\ref{B2}
+
+\BivA %% Assumption~\ref{B:unconditional:mix}
+
+\BivB %% Assumption~\ref{B:temporal:mix}
+
+\Bv  %% Assumption~\ref{B:girf}
+
+\Bvi    %% Assumption~\ref{B:XG_XA_ind}
+
+\TheoremII %% Theorem~\ref{thm:abf}
+
+\begin{proof}
+ A full proof is provided in Sec.~\SuppSecThmII. The extra work to prove Theorem~\ref{thm:abf} beyond the argument for Theorem~\ref{thm:tif} is to bound the error arising from the importance sampling approximation to a draw from the adapted transition density. 
+This bound is constructed using Assumptions~\ref{B:temporal:mix}, \ref{B:girf} and~\ref{B:XG_XA_ind}.
+The remainder of the proof follows the same approach as Theorem~\ref{thm:tif}, with the adapted process replacing the unconditional latent process.
+\end{proof}
+
+The theoretical results foreshadow our empirical observations that the relative performance of {\UBF}, {\ABF} and {\ABFIR} is situation-dependent.
+Assumption~\ref{A:unconditional:mix} is a mixing assumption for the unconditional latent process, whereas Assumption~\ref{B:unconditional:mix} replaces this with a mixing assumption for the adapted process conditional on the data. 
+For a non-stationary process, Assumption~\ref{A:unconditional:mix} may fail to hold uniformly in $\Unit$ whereas the adapted process may provide stable tracking of the latent process (Sec.~\SuppSecAdaptedSimulation).
+When Assumption~\ref{A:unconditional:mix} holds, {\UBF} can benefit from not requiring Assumptions~\ref{B:temporal:mix}, \ref{B:girf} and~\ref{B:XG_XA_ind}. 
+Adapted simulation is an easier problem than filtering, but nevertheless can become difficult in high dimensions, with the consequence that Assumption~\ref{B:girf} could require large $\BvConstant$.
+The tradeoff between {\ABF} and {\ABFIR} depends on the effectiveness of the guide function for the problem at hand.
+Intermediate resampling and guide function calculation require additional computational resources, which will necessitate smaller values of $\Rep$ and $\Np$.
+In some situations, the improved scaling properties of {\ABFIR} compared to {\ABF}, corresponding to a lower value of $\BvConstant$, will outweigh this cost.
+
+\medskip
+
+\section{Examples}
+
+Likelihood evaluation via filtering does not by itself enable parameter estimation for POMP models, however it provides a foundation for Bayesian \citep{andrieu10} and likelihood-based \citep{ionides15} inference.
+We therefore investigate likelihood evaluation with the expectation that improved methods for likelihood evaluation will lead to improved statistical methodology. 
+Monte Carlo methods for computing the log likelihood generally suffer from both bias and variance, both of which can be considerable for large datasets and complex models.
+Appropriate inference methodology, such as Monte Carlo adjusted profile (MCAP) confidence intervals, can accommodate substantial Monte Carlo variance so long as the bias is slowly varying across the statistically plausible region of the parameter space \citep{ionides17}.
+
+
+We compare the performance of the three bagged filters ({\UBF}, {\ABF} and {\ABFIR}) against each other and against alternative approaches.
+Ensemble Kalman filter (EnKF) methods propagate the ensemble members by simulation from the dynamic model and then update the ensemble to assimilate observations using a Gaussian-inspired rule \citep{evensen96,lei10}.
+The block particle filter (BPF) \citep{rebeschini15,ng02} partitions the latent space and combines independently drawn components from each partition.
+BPF overcomes COD under weak coupling assumptions \citep{rebeschini15}.
+Unlike these two methods, our bagged filters modify particles only according to the latent dynamics.
+Thus, our methods satisfy any conservation laws, continuity or smoothness that arise when simulating from the dynamic model.
+
+
+We first consider a spatiotemporal Gaussian process for which the exact likelihood is available via a Kalman filter. 
+We see in Fig.~\ref{fig:bm_alt_plot} that {\ABFIR} can have a considerable advantages over {\UBF} and {\ABF} for problems with an intermediate level of coupling.
+We then develop a model for measles transmission within and between cities.
+The model is weakly coupled, leading to successful performance for all three bagged filters.
+This class of metapopulation models was the primary motivation for the development of these methodologies.
+However, for a highly coupled system of moderate dimensions, a global particle filter such as GIRF may outperform our bagged methods;
+an example is the Lorenz-96 model demonstrated in Sec.~\SuppSecLorenz.
+
+
+
+
+\subsection{Correlated Brownian motion} 
+
+Suppose $\myvec{X}(t) = \Omega \myvec{W}(t)$ where $\myvec{W}(t)=W_{1:\Unit}(t)$ comprises $\Unit$ independent standard Brownian motions, and $\Omega_{\unit,\altUnit}=\rho^{\dist(\unit,\altUnit)}$ with $\dist(\unit,\altUnit)$ being the circle distance,
+\[
+\dist(\unit,\altUnit) 
+= \min\big(|\unit-\altUnit|, |\unit-\altUnit+\Unit|, |\unit-\altUnit-\Unit|\big).
+\]
+Set $t_\time=\time$ for $\time=0,1,\dots,\Time$ with initial value $\myvec{X}(0)=\myvec{0}$ and suppose measurement errors are independent and normally distributed, $Y_{\unit\comma\time}= X_{\unit\comma\time}+ \eta_{\unit\comma\time}$ with
+$\eta_{\unit\comma\time}\sim \normal(0,\tau^2)$.
+The parameter $\rho$ determines the strength of the spatial coupling. 
+
+
+%%%%% bbbbbbbbbbbbbbbbbb
+
+<<bm-settings,cache=FALSE,echo=F>>=
+
+
+bm_files_dir <- paste0("bm_",bm_run_level,"/")
+if(!dir.exists(bm_files_dir)) dir.create(bm_files_dir)
+
+
+stew(file=paste0(bm_files_dir,"bm_settings.rda"),{
+
+  # copy variables that should be included in the stew
+  bm_run_level <- bm_run_level 
+  bm_cores <- cores
+
+  bm_tol <- 1e-300
+
+  # run_level 1 for debugging; 2 for quick run; 3 for long run; 4 for production(?)
+
+  if(bm_run_level==1){
+    bm_U <- c(6, 4)
+    bm_N <- 2
+    bm_replicates <- 2 # number of Monte Carlo replicates
+    bm_girf_Np <- 20
+    bm_girf_lookahead <- 2
+    bm_girf_nguide <- 10
+    bm_pfilter_Np <- 100
+    bm_abf_Nrep <- 3
+    bm_abf_Np_per_replicate <- 10
+    bm_ubf_Nrep <- 3
+    bm_abfir_Nrep <- bm_abf_Nrep
+    bm_abfir_Np_per_replicate <- bm_abf_Np_per_replicate
+    bm_bpf_Np <- 50
+    bm_bpf_units_per_block <- 2
+    bm_enkf_Np <- 20
+  } else if(bm_run_level==2){
+    bm_U <- c(32,16,8,4)
+    bm_N <- 20
+    bm_replicates <- 5 # number of Monte Carlo replicates
+    bm_girf_Np <- 1000
+    bm_girf_lookahead <- 2
+    bm_girf_nguide <- 50
+    bm_pfilter_Np <- 10000
+    bm_abf_Nrep <- 500
+    bm_abf_Np_per_replicate <- 100
+    bm_ubf_Nrep <- 5000
+    bm_abfir_Nrep <- 200
+    bm_abfir_Np_per_replicate <- 50
+    bm_bpf_Np <- 5000
+    bm_bpf_units_per_block <- 2
+    bm_enkf_Np <- 5000
+  } else if(bm_run_level==3){
+    bm_replicates <- 5 # number of Monte Carlo replicates
+    bm_U <- c(40,30,20,10,5)
+    bm_N <- 50
+    bm_girf_Np <- 1000
+    bm_girf_lookahead <- 2
+    bm_girf_nguide <- 50
+    bm_pfilter_Np <- 50000
+    bm_abf_Nrep <- 400
+    bm_abf_Np_per_replicate <- 400
+    bm_ubf_Nrep <- 10000
+    bm_abfir_Nrep <- 200
+    bm_abfir_Np_per_replicate <- 200
+    bm_bpf_Np <- 10000
+    bm_bpf_units_per_block <- 5
+    bm_enkf_Np <- 5000    
+  } else if(bm_run_level==4){
+    bm_replicates <- 5 # number of Monte Carlo replicates
+    bm_U <- c(100,80,60,40,30,20,10,5)
+    bm_N <- 50
+    bm_girf_Np <- 1000
+    bm_girf_lookahead <- 2
+    bm_girf_nguide <- 50
+    bm_pfilter_Np <- 100000
+    bm_abf_Nrep <- 400
+    bm_abf_Np_per_replicate <- 400
+    bm_ubf_Nrep <- 40000
+    bm_abfir_Nrep <- 200
+    bm_abfir_Np_per_replicate <- 200
+    bm_bpf_Np <- 20000
+    bm_bpf_units_per_block <- 3
+    bm_enkf_Np <- 10000
+  }
+
+  set.seed(4512)
+  bm_list <- foreach(u=bm_U) %do% bm(U=u, N=bm_N)
+
+})
+
+bm_jobs <- expand.grid(U=bm_U,reps=1:bm_replicates)
+bm_jobs$U_id <- rep(seq_along(bm_U),times=bm_replicates)
+
+@
+
+
+
+<<bm_nbhd,echo=F>>=
+bm_nbhd <- function(object, time, unit) {
+  nbhd_list <- list()
+  if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+  if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+  if(unit>1) nbhd_list <- c(nbhd_list, list(c(unit-1, time)))
+  if(unit>2) nbhd_list <- c(nbhd_list, list(c(unit-2, time)))
+  return(nbhd_list)
+}
+@
+
+
+<<bm_kf,cache=F,echo=F>>=
+bm_kf <- stew(file=paste0(bm_files_dir,"bm_kf.rda"),seed=25487,{
+  foreach(i=seq_along(bm_U),.combine=c)%do%{
+    bm <- bm_list[[i]]
+    bm_units <- bm_U[i]
+    bm_dist <- function(u,v,U) min(abs(u-v),abs(u-v+U),abs(u-v-U))
+    bm_dmat <- matrix(0,bm_units,bm_units)
+    for(u in 1:bm_units) {
+      for(v in 1:bm_units) {
+        bm_dmat[u,v] <- bm_dist(u,v,bm_units)
+      }
+    }
+    rootQ <- coef(bm)["rho"]^bm_dmat * coef(bm)["sigma"]
+    kf <- pomp:::kalmanFilter(
+      t=1:bm_N,
+      y=obs(bm),
+      X0=rinit(bm),
+      A= diag(bm_units),
+      Q= rootQ %*% rootQ,
+      C=diag(bm_units),
+      R=diag(coef(bm)["tau"]^2, nrow=bm_units)
+    )$loglik
+  } -> bm_kf_results
+})
+
+bm_jobs$logLik <- rep(bm_kf_results,times=bm_replicates)
+@
+
+<<bm_girf,cache=F,echo=F>>=
+bm_girf <- stew(file=paste0(bm_files_dir,"bm_girf.rda"),seed=5981724,{
+  foreach(job=iter(bm_jobs,"row")) %dopar% {
+    system.time(
+      girf(bm_list[[job$U_id]], method='adams',
+        Np=bm_girf_Np,
+        Ninter = job$U,
+        lookahead = bm_girf_lookahead,
+        Nguide = bm_girf_nguide,
+        tol = bm_tol) -> bm_girf_out 
+    ) -> bm_girf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(bm_girf_out),time=bm_girf_time["elapsed"],bm_girf_out)
+    list(logLik=logLik(bm_girf_out),time=bm_girf_time["elapsed"])
+  } -> bm_girf_list
+})
+bm_jobs$girf_logLik <- vapply(bm_girf_list,function(x)x$logLik,numeric(1))
+bm_jobs$girf_time <- vapply(bm_girf_list,function(x) x$time,numeric(1))
+@
+
+<<bm_apf,cache=F,echo=F,eval=F>>=
+bm_apf <- stew(file=paste0(bm_files_dir,"bm_apf.rda"),seed=5981724,{
+  foreach(job=iter(bm_jobs,"row")) %dopar% {
+    system.time(
+      girf(bm_list[[job$U_id]], method='adams',
+        Np=bm_apf_Np,
+        Ninter = 1,
+        lookahead = 2,
+        Nguide = bm_apf_nguide,
+        tol = bm_tol 
+      )-> bm_apf_out 
+    ) -> bm_apf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(bm_apf_out),time=bm_apf_time["elapsed"],bm_apf_out)
+    list(logLik=logLik(bm_apf_out),time=bm_apf_time["elapsed"])
+  } -> bm_apf_list
+})
+
+bm_jobs$apf_logLik <- vapply(bm_apf_list,function(x)x$logLik,numeric(1))
+bm_jobs$apf_time <- vapply(bm_apf_list,function(x) x$time,numeric(1))
+
+@
+
+
+<<bm_abf,cache=F,echo=F>>=
+bm_abf <- stew(file=paste0(bm_files_dir,"bm_abf.rda"),seed=844424,{
+  foreach(job=iter(bm_jobs,"row")) %do% {
+    system.time(
+      abf(bm_list[[job$U_id]], 
+        Nrep = bm_abf_Nrep,
+        Np=bm_abf_Np_per_replicate,
+        nbhd = bm_nbhd, tol=bm_tol) -> bm_abf_out 
+    ) -> bm_abf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(bm_abf_out),time=bm_abf_time["elapsed"],bm_abf_out)
+    list(logLik=logLik(bm_abf_out),time=bm_abf_time["elapsed"])
+  } -> bm_abf_list
+})
+bm_jobs$abf_logLik <- vapply(bm_abf_list,function(x)x$logLik,numeric(1))
+bm_jobs$abf_time <- vapply(bm_abf_list,function(x) x$time,numeric(1))
+
+@
+
+
+<<bm_ubf,cache=F,echo=F>>=
+bm_ubf <- stew(file=paste0(bm_files_dir,"bm_ubf.rda"),seed=844424,{
+  foreach(job=iter(bm_jobs,"row")) %do% {
+    system.time(
+      abf(bm_list[[job$U_id]], 
+        Nrep = bm_ubf_Nrep,
+        Np=1,
+        nbhd = bm_nbhd, tol=bm_tol) -> bm_ubf_out 
+    ) -> bm_ubf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(bm_ubf_out),time=bm_ubf_time["elapsed"],bm_ubf_out)
+    list(logLik=logLik(bm_ubf_out),time=bm_ubf_time["elapsed"])
+  } -> bm_ubf_list
+})
+bm_jobs$ubf_logLik <- vapply(bm_ubf_list,function(x)x$logLik,numeric(1))
+bm_jobs$ubf_time <- vapply(bm_ubf_list,function(x) x$time,numeric(1))
+
+@
+
+
+<<bm_abfir,cache=F,echo=F>>=
+bm_abfir <- stew(file=paste0(bm_files_dir,"bm_abfir.rda"),seed=53398,{
+  foreach(job=iter(bm_jobs,"row")) %do% {
+    system.time(
+      abfir(bm_list[[job$U_id]], method='adams',
+        Nrep = as.integer(bm_abfir_Nrep),
+        Np=bm_abfir_Np_per_replicate,
+        Ninter = as.integer(job$U/2),
+        nbhd = bm_nbhd, tol=bm_tol) -> bm_abfir_out 
+    ) -> bm_abfir_time
+#    uncomment for debugging 
+#    list(logLik=logLik(bm_abfir_out),time=bm_abfir_time["elapsed"],bm_abfir_out)
+    list(logLik=logLik(bm_abfir_out),time=bm_abfir_time["elapsed"])
+  } -> bm_abfir_list
+})
+bm_jobs$abfir_logLik <- vapply(bm_abfir_list,function(x)x$logLik,numeric(1))
+bm_jobs$abfir_time <- vapply(bm_abfir_list,function(x) x$time,numeric(1))
+
+
+@
+
+
+<<bm_pfilter,cache=F,echo=F>>=
+bm_pfilter <- stew(file=paste0(bm_files_dir,"bm_pfilter.rda"),seed=53285,{
+  foreach(job=iter(bm_jobs,"row")) %dopar% {
+    system.time(
+      pfilter(bm_list[[job$U_id]],Np=bm_pfilter_Np, tol=bm_tol) -> bm_pfilter_out
+    ) -> bm_pfilter_time
+#    uncomment for debugging 
+#    list(logLik=logLik(bm_pfilter_out),time=bm_pfilter_time["elapsed"],bm_pfilter_out)
+    list(logLik=logLik(bm_pfilter_out),time=bm_pfilter_time["elapsed"])
+  } -> bm_pfilter_list
+})
+bm_jobs$pfilter_logLik <- vapply(bm_pfilter_list,function(x)x$logLik,numeric(1))
+bm_jobs$pfilter_time <- vapply(bm_pfilter_list,function(x) x$time,numeric(1))
+@
+
+
+	
+<<bm_bpf,cache=F,echo=F>>=
+#
+#  to test:
+#  bpfilter(bm_list[[1]],50, block_size=1) -> tmp
+#
+bm_bpf <- stew(file=paste0(bm_files_dir,"bm_bpf.rda"),seed=53285,{
+  foreach(job=iter(bm_jobs,"row")) %dopar% {
+    system.time(
+      bpfilter(bm_list[[job$U_id]],
+        Np=bm_bpf_Np,
+	block_size=bm_bpf_units_per_block) -> bm_bpf_out
+    ) -> bm_bpf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(bm_bpf_out),time=bm_bpf_time["elapsed"],bm_bpf_out)
+#
+# replace using logLik(bm_bpf_out) when that method exists
+#
+    list(logLik=bm_bpf_out@loglik,time=bm_bpf_time["elapsed"])
+  } -> bm_bpf_list
+})
+bm_jobs$bpf_logLik <- vapply(bm_bpf_list,function(x)x$logLik,numeric(1))
+bm_jobs$bpf_time <- vapply(bm_bpf_list,function(x) x$time,numeric(1))
+@
+
+<<bm_enkf,cache=F,echo=F>>=
+bm_enkf <- stew(file=paste0(bm_files_dir,"bm_enkf.rda"),seed=53285,{
+  foreach(job=iter(bm_jobs,"row")) %dopar% {
+    system.time(
+      enkf(bm_list[[job$U_id]],
+        Np=bm_enkf_Np) -> bm_enkf_out
+    ) -> bm_enkf_time
+    list(logLik=bm_enkf_out@loglik,time=bm_enkf_time["elapsed"])
+  } -> bm_enkf_list
+})
+bm_jobs$enkf_logLik <- vapply(bm_enkf_list,function(x)x$logLik,numeric(1))
+bm_jobs$enkf_time <- vapply(bm_enkf_list,function(x) x$time,numeric(1))
+@
+
+
+<<bm_alt_plot, echo=F, fig.height=4, fig.width=5.5, out.width="4.5in", fig.cap = paste('log likelihood estimates for a correlated Brownian motion model of various dimensions. {\\UBF}, {\\ABF} and {\\ABFIR} are compared with a guided intermediate resampling filter (GIRF), standard particle filter (PF), block particle filter (BPF) and ensemble Kalman filter (EnKF). The exact likelihood was computed via a Kalman filter (KF).')>>=
+
+
+# put output in tall format for plotting
+#bm_methods <- c("APF","ABF", "ABFIR","GIRF","KF","PF")
+bm_methods <- c("ABF", "ABF-IR","UBF","GIRF","KF","PF","BPF","EnKF")
+bm_results <- data.frame(
+  Method=rep(bm_methods,each=nrow(bm_jobs)),
+  logLik=c(
+#    bm_jobs$apf_logLik,
+    bm_jobs$abf_logLik,
+    bm_jobs$abfir_logLik,
+    bm_jobs$ubf_logLik,
+    bm_jobs$girf_logLik,
+    bm_jobs$logLik,
+    bm_jobs$pfilter_logLik,
+    bm_jobs$bpf_logLik,
+    bm_jobs$enkf_logLik
+  ),
+  Units=rep(bm_jobs$U,reps=length(bm_methods))
+)
+bm_point_perturbation <- 1.5
+bm_results$U <- bm_results$Units+
+  rep( bm_point_perturbation*seq(from=-1,to=1,length=length(bm_methods)),
+    each=nrow(bm_jobs))
+bm_results$logLik_per_unit <- bm_results$logLik/bm_results$Units
+bm_results$logLik_per_obs <- bm_results$logLik_per_unit/bm_N
+
+save(file=paste0(bm_files_dir,"bm_results.rda"),bm_results,bm_jobs)
+
+if(0){
+  ggplot(bm_results,mapping = aes(x = U, y = logLik_per_unit)) +
+  geom_point(aes(color = Method)) +
+  scale_y_continuous(limits=c(-108,NA)) +
+# scale_y_continuous() +
+  ylab("log likelihood per unit")
+}
+
+
+bm_max <- max(bm_results$logLik_per_obs)
+
+cbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+ggplot(bm_results,mapping = aes(x = U, y = logLik_per_obs, group=Method,color=Method,shape=Method,linetype=Method)
+) +
+#  geom_point(aes(shape=Method),size=1) +
+#  geom_line(aes(linetype=Method), size=1) +
+  scale_linetype_manual(values=c(1,1,1,1,2,2,2,2)) +
+  scale_shape_manual(values=c(1,2,4,5,1,2,4,5)) +
+  scale_color_manual(values=cbPalette[c(2,3,4,5,6,1,7,8)])+
+  geom_point() +
+  stat_summary(fun=mean, geom="line") +
+  coord_cartesian(ylim=c(bm_max-0.35,bm_max))+
+  theme(legend.key.width = unit(1,"cm"))+
+  ylab("log likelihood per unit per time")
+
+@
+
+Fig.~\ref{fig:bm_alt_plot} shows how the bagged filters scale on this Gaussian model, compared to a standard particle filter (PF), a guided intermediate resampling filter (GIRF), a block particle filter (BPF), and an ensemble Kalman filter.
+For our numerical results, we use $\tau=\Sexpr{coef(bm)['tau']}$, $\rho=\Sexpr{coef(bm)['rho']}$ and $\Time=\Sexpr{length(time(bm))}$.
+The algorithmic parameters and run times are listed in Sec.~\SuppSecBM, together with a plot of the simulated data and supplementary discussion.
+In this case, the exact likelihood is computable via the Kalman filter (KF). 
+Since EnKF is based on a Gaussian approximation, it is also exact in this case, up to a small Monte Carlo error. 
+The GIRF framework encompasses lookahead particle filter techniques, such as the auxiliary particle filter \citep{pitt99}, and intermediate resampling techniques \citep{delmoral17}. 
+GIRF methods combining these techniques were found to perform better than either of these component techniques alone \citep{park20}.
+Thus, GIRF here represents a state-of-the-art auxiliary particle filter that targets the complete joint filter density for all units.
+We use the general-purpose, plug-and-play implementation of GIRF provided by the \texttt{spatPomp} R package \citep{asfaw20github};
+ this implementation of GIRF is thus not tailored in any way to exploit special features of this toy model.
+PF works well for small values of $\Unit$ in Fig.~\ref{fig:bm_alt_plot}, but rapidly starts struggling as $\Unit$ increases.
+GIRF behaves comparably to PF for small $\Unit$ but its performance is maintained for larger $\Unit$.
+{\ABF} and {\ABFIR} have some efficiency loss, for small $\Unit$, relative to PF and GIRF due to the localization involved in the filter weighting, but for large $\Unit$ this cost is paid back by the benefit of the reduced Monte Carlo variability.
+{\UBF} has a larger efficiency loss for small $\Unit$, but its favorable scaling properties lead it to overtake {\ABF} for larger $\Unit$.
+BPF shows stable scaling and modest efficiency loss.
+This linear Gaussian SpatPOMP model provides a simple scenario to demonstrate scaling behavior.
+For filters that cannot take direct advantage of the Gaussian property of the model, we see that there is a tradeoff between efficiency at low $\Unit$ and scalability.
+This is unavoidable, since there is no known algorithm that is simultaneously fully efficient (up to Monte Carlo error), scalable, and applicable to general SpatPOMP models.
+We now explore this tradeoff empirically on to a more complex SpatPOMP exemplifying the nonlinear non-Gaussian models motivating our new filtering approach.
+
+%%% mmmmmmmmmmmmmmmmmmmmmm
+
+\subsection{Spatiotemporal measles epidemics}
+
+Data analysis for spatiotemporal systems featuring nonlinear, nonstationary mechanisms and partial observability has been a longstanding open challenge for ecological and epidemiological analysis \citep{bjornstad01}.
+A compartment modeling framework for spatiotemporal population dynamics divides the population at each spatial location into categories, called compartments, which are modeled as homogeneous. 
+Spatiotemporal compartment models can be called patch models or metapopulation models in an ecological context.
+Ensemble Kalman filter (EnKF) methods provide a state-of-the-art approach to inference for metapopulation models \citep{li20} despite concerns that the approximations inherent in the EnKF can be problematic for models that are highly nonlinear or non-Gaussian \citep{ades15}.
+Our bagged filter methodologies have theoretical guarantees for arbitrarily nonlinear and non-Gaussian models, while having improved scaling properties compared to particle filters.
+
+We consider a spatiotemporal model for disease transmission dynamics of measles within and between multiple cities, based on the model of \citet{park20} which adds spatial interaction to the compartment model presented by \cite{he10}.
+The model compartmentalizes the population of each city into susceptible ($S$), exposed ($E$), infectious ($I$), and recovered/removed ($R$) categories.
+The number of individuals in each compartment city $\unit$ at time $t$ are denoted by integer-valued random variables $S_\unit(t)$, $E_\unit(t)$, $I_\unit(t)$, and $R_\unit(t)$.
+The population dynamics are written in terms of counting processes $N_{\bullet\bullet,\unit}(t)$ enumerating cumulative transitions in city $\unit$, up to time $t$, between compartments identified by the subscripts.
+Our model is described by the following system of stochastic differential equations, for $\unit=1,\dots, \Unit$,
+\begin{equation}
+\nonumber
+%\label{eq:measles:system}
+\begin{array}{lllllll}
+\displaystyle dS_\unit(t) &=& dN_{BS,\unit}(t) &-& dN_{SE,\unit}(t) &-& dN_{SD,\unit}(t) \\
+\displaystyle dE_\unit(t) &=& dN_{SE,\unit}(t) &-& dN_{EI,\unit}(t) &-& dN_{ED,\unit}(t) \\
+\displaystyle dI_\unit(t) &=& dN_{EI,\unit}(t) &-& dN_{IR,\unit}(t) &-& dN_{ID,\unit}(t) 
+\end{array}
+\end{equation}
+Here,  $N_{BS,\unit}(t)$ models recruitment into the susceptible population, and $N_{\bullet D,\unit}(t)$ models emigration and death. 
+The total population $P_\unit(t)=S_\unit(t)+E_\unit(t)+I_\unit(t)+R_\unit(t)$ is calculated by smoothing census data and is treated as known.
+The number of recovered individuals $R_\unit(t)$ in city $\unit$ is therefore defined implicitly.
+$N_{SE,\unit}(t)$ is modeled as negative binomial death processes \citep{breto09,breto11}
+with over-dispersion parameter $\sigma_{SE}$, and rate given by
+\begin{eqnarray}
+\nonumber
+\mathbb{E} \big[ N_{SE,\unit}(t+dt) - N_{SE,\unit}(t) \big] 
+&=& 
+\beta(t) \, S_\unit(t) 
+\Big[ 
+  \left( \frac{I_\unit+\iota}{P_\unit} \right)^\alpha
+\\
+\label{eq:dEdt}
+&& \hspace{-3.8cm}
+ + \sum_{\altUnit \neq \unit} \frac{v_{\unit\altUnit}}{P_\unit} 
+  \left\{ 
+    \left(
+      \frac{ I_{\altUnit} }{ P_{\altUnit} }
+    \right)^\alpha - 
+    \left(
+      \frac{I_\unit}{P_\unit}  
+    \right)^\alpha
+  \right\}
+\Big] dt + o(dt),\label{eqn:transmissionrate}
+\end{eqnarray}
+where $\beta(t)$ models seasonality driven by high contact rates between children at school, described by
+\begin{equation}
+\nonumber
+  \beta(t)=\begin{cases}
+\big(1+\amplitude(1-p)p^{-1} \big)\, \meanBeta & \mbox{ during school term},\\
+\big( 1-\amplitude\big) \, \meanBeta& \mbox{ during vacation}
+  \end{cases} \label{eq:term}
+\end{equation}
+with $p = 0.759$ being the proportion of the year taken up by the school terms, $\meanBeta$ is the mean transmission rate, and $\amplitude$ measures the reduction of transmission during school holidays.
+In \myeqref{eq:dEdt}, $\alpha$ is a mixing exponent modeling inhomogeneous contact rates within a city, and $\iota$ models immigration of infected individuals which is appropriate when analyzing a subset of cities that cannot be treated as a closed system.
+The number of travelers from city $\unit$ to $\altUnit$ is denoted by $v_{\unit\altUnit}$. 
+Here, $v_{\unit\altUnit}$ is constructed using the gravity model of \cite{xia04}, 
+\[
+v_{\unit\altUnit} = \gravity \cdot \frac{\;\overline{\dist}\;}{\bar{P}^2} \cdot \frac{P_\unit \cdot P_{\altUnit}}{\dist(\unit,\altUnit)},
+\]
+where $\dist(\unit,\altUnit)$ denotes the distance between city $\unit$ and city $\altUnit$, $P_\unit$ is the average population for city $\unit$ across time, $\bar{P}$ is the average population across cities, and $\overline{\dist}$ is the average distance between a randomly chosen pair of cities.
+Here, we model $v_{\unit\altUnit}$ as fixed through time and symmetric between any two arbitrary cities, though a natural extension would allow for temporal variation and asymmetric movement between two cities.
+The transition processes $N_{EI,\unit}(t)$, $N_{EI,\unit}(t)$ and $N_{\bullet D,\unit}(t)$ are modeled as conditional Poisson processes with per-capita rates $\mu_{EI}$, $\mu_{IR}$ and $\mu_{\bullet D}$ respectively, and we fix $\mu_{\bullet D}=50 \mbox{ year}^{-1}$.
+The birth process $N_{BS,\unit}(t)$ is an inhomogeneous Poisson processes with rate $\mu_{BS,\unit}(t)$, given by interpolated census data.
+
+To complete the model specification, we must describe the measurement process.
+Let $Z_{\unit\comma\time}=N_{IR\comma\unit}(t_\time)-N_{IR\comma\unit}(t_{\time-1})$ be the number of removed infected individuals in the $n$th reporting interval.
+Suppose that cases are quarantined once they are identified, so that reported cases comprise a fraction $\rho$ of these removal events.
+The case report $\data{y}_{\unit\comma\time}$ is modeled as a realization of a discretized conditionally Gaussian random variable $Y_{\unit\comma\time}$, defined for $y>0$ via
+\begin{eqnarray}
+\nonumber
+\prob\big[Y_{\unit\comma\time}{=}y\mid Z_{\unit\comma\time}{=}z\big] &=& \Phi\big(y+0.5; \rho z,\rho(1-\rho)z+\psi^2\rho^2z^2\big)
+\\
+&&\hspace{-20mm}
+- \Phi\big(y-0.5; \rho z,\rho(1-\rho)z+\psi^2\rho^2z^2\big)
+\label{eq:obs}
+\end{eqnarray}
+where $\Phi(\cdot;\mu,\sigma^2)$ is the $\normal(\mu,\sigma^2)$ cumulative distribution function, and $\psi$ models overdispersion relative to the binomial distribution.
+For $y=0$, we replace $y-0.5$ by $-\infty$ in \myeqref{eq:obs}.
+
+
+%%%%%%  msmsmsmsmsmsmsmsmsmsms %%%%%%%%%%%%
+
+<<measles_spatPomp,eval=T,echo=F>>=
+library(spatPomp)
+measles_model_dir <- "measlesModel/"
+if(!dir.exists(measles_model_dir)) dir.create(measles_model_dir)
+
+measles_spatPomp <- stew(file=paste0(measles_model_dir,"measles_spatPomp.rda"),{
+  measles_U <- 40    # number of cities (units) for simulation that can subsequently be subsetted
+  measles_N <- 15*26 # number of 2-week observation intervals for simulation that can subsequently be subsetted
+  measles_unit_statenames <- c('S','E','I','R', 'C','W')
+  measles_S_0 <- 0.032; measles_E_0 <- 0.00005; measles_I_0 <- 0.00004
+  measles_unit_params <- c(
+    alpha=1,
+    iota=0,  # set to zero for a closed population
+    R0=30,
+    cohort=0,
+    amplitude=0.5, gamma=52, sigma=52,mu=0.02,
+    sigmaSE=0.15, rho=0.5,
+    psi=0.15,
+    g=400,
+    S_0=measles_S_0, E_0=measles_E_0, I_0=measles_I_0,
+    R_0=1-measles_S_0-measles_E_0-measles_I_0
+  )
+  measles_uk <- measles(measles_U)
+  measles_statenames <- paste0(rep(measles_unit_statenames,
+    each=measles_U),1:measles_U)
+  measles_IVPnames <- paste0(measles_statenames[1:(4*measles_U)],"_0")
+  measles_RPnames <- c("alpha","iota","R0","cohort","amplitude",
+    "gamma","sigma","mu","sigmaSE","rho","psi","g")
+  measles_paramnames <- c(measles_RPnames,measles_IVPnames)
+
+  measles_params <- rep(NA,length(measles_paramnames))
+  names(measles_params) <- measles_paramnames
+
+  measles_params[measles_RPnames] <- measles_unit_params[measles_RPnames]
+  measles_params[paste0("S",1:measles_U,"_0")] <-measles_unit_params["S_0"]
+  measles_params[paste0("E",1:measles_U,"_0")] <-measles_unit_params["E_0"]
+  measles_params[paste0("I",1:measles_U,"_0")] <-measles_unit_params["I_0"]
+  measles_params[paste0("R",1:measles_U,"_0")] <-measles_unit_params["R_0"]
+
+  set.seed(34)
+  measles_sim <- simulate(measles_uk,params=measles_params,
+    times=time(measles_uk)[1:measles_N])
+
+  measles_subset <- function(m_U,m_N){
+    m <- measles(U=m_U)
+    m@data <- measles_sim@data[1:m_U,1:m_N]
+    time(m) <- measles_sim@times[1:m_N]
+    m_statenames <- paste0(rep(measles_unit_statenames,each=m_U),1:m_U)
+    m_IVPnames <- paste0(m_statenames[1:(4*m_U)],"_0")
+    m_paramnames <- c(measles_RPnames,m_IVPnames)
+    m_params <- measles_params[names(measles_params)%in%m_paramnames]
+    coef(m) <- m_params
+    return(m)
+  }
+})
+@
+
+
+
+<<measles_image_plot, echo=F, fig.height=6, fig.width=7, out.width="6.5in", fig.cap = paste('Log(reported cases $+$ 1) for (A) the measles simulation used for the likelihood slice; (B) the corresponding UK measles data. The simulation shares the biennial pattern, with most but not all cities locked in phase most of the time.')>>=
+library(spatPomp)
+library(fields)
+par(mai=c(0.5,0.7,0.1,0.1))
+par(mfrow=c(2,1))
+image.plot(y=1:dim(obs(measles_sim))[1],x=time(measles_sim),z=log(t(obs(measles_sim)+1)),ylab="unit",xlab="",col=gray.colors(33))
+mtext("A",side=2,line=2.5,las=1,padj=-5.5,cex=1.8)
+image.plot(y=1:dim(obs(measles_uk))[1],x=time(measles_uk),z=log(t(obs(measles_uk)+1)),ylab="unit",xlab="",col=gray.colors(33))
+mtext("B",side=2,line=2.5,las=1,padj=-5.5,cex=1.8)
+mtext("time",side=1,line=2.5)
+@
+
+<<mscale_settings,cache=FALSE,echo=F>>=
+
+  # run_level 1 for debugging; 2 for quick run; 3 for long run;
+  # 4 even longer; 5 for production(?)
+  # 6 for a small-U test figure
+
+mscale_files_dir <- paste0("mscale_",mscale_run_level,"/")
+if(!dir.exists(mscale_files_dir)) dir.create(mscale_files_dir)
+
+stew(file=paste0(mscale_files_dir,"mscale_settings.rda"),{
+
+  # copy variables that should be included in the stew
+  mscale_run_level <- mscale_run_level 
+  mscale_cores <- cores
+
+  mscale_tol <- 1e-300
+
+  if(mscale_run_level==1){
+    mscale_U <- c(4, 2)
+    mscale_N <- 5
+    mscale_replicates <- 2 # number of Monte Carlo replicates
+    mscale_girf_Np <- 50
+    mscale_girf_lookahead <- 2
+    mscale_girf_nguide <- 10
+    mscale_pfilter_Np <- 100
+    mscale_abf_Nrep <- 3
+    mscale_abf_Np_per_replicate <- 10
+    mscale_ubf_Nrep <- 20
+    mscale_abfir_Nrep <- mscale_abf_Nrep
+    mscale_abfir_Np_per_replicate <- mscale_abf_Np_per_replicate
+    mscale_enkf_Np <- 100
+    mscale_bpf_units_per_block <- 1
+    mscale_bpf_Np <- 50
+    mscale_bootgirf_Np <- 50
+    mscale_bootgirf_nguide <- 10
+    mscale_bootgirf_lookahead <- 2
+  } else if(mscale_run_level==2){
+    mscale_U <- c(16,8,4,2)
+    mscale_N <- 4*26
+    mscale_replicates <- 4 # number of Monte Carlo replicates
+    mscale_girf_Np <- 1000
+    mscale_girf_lookahead <- 1
+    mscale_girf_nguide <- 50
+    mscale_pfilter_Np <- 10000
+    mscale_abf_Nrep <- 500
+    mscale_abf_Np_per_replicate <- 100
+    mscale_ubf_Nrep <- 5000
+    mscale_abfir_Nrep <- 200
+    mscale_abfir_Np_per_replicate <- 50
+    mscale_enkf_Np <- 5000
+    mscale_bpf_units_per_block <- 1
+    mscale_bpf_Np <- 5000
+    mscale_bootgirf_Np <- 1000
+    mscale_bootgirf_nguide <- 20
+    mscale_bootgirf_lookahead <- 2
+  } else if(mscale_run_level==3){
+    mscale_replicates <- 5 # number of Monte Carlo replicates
+    mscale_U <- c(32, 16, 8, 4, 2)
+    mscale_N <- 5*26
+    mscale_girf_Np <- 2000
+    mscale_girf_lookahead <- 2
+    mscale_girf_nguide <- 20
+    mscale_pfilter_Np <- 50000
+    mscale_abf_Nrep <- 500
+    mscale_abf_Np_per_replicate <- 100
+    mscale_ubf_Nrep <- 5000
+    mscale_abfir_Nrep <- 200
+    mscale_abfir_Np_per_replicate <- 100
+    mscale_enkf_Np <- 10000
+    mscale_bpf_units_per_block <- 1
+    mscale_bpf_Np <- 10000
+    mscale_bootgirf_Np <- 2000
+    mscale_bootgirf_nguide <- 20
+    mscale_bootgirf_lookahead <- 2
+  } else if(mscale_run_level==4){
+    mscale_replicates <- 5 # number of Monte Carlo replicates
+    mscale_U <- c(20,16,12,10,8,6,4,2)
+    mscale_N <- 52
+    mscale_girf_Np <- 2000
+    mscale_girf_lookahead <- 1
+    mscale_girf_nguide <- 50
+    mscale_pfilter_Np <- 100000
+    mscale_abf_Nrep <- 500
+    mscale_abf_Np_per_replicate <- 500
+    mscale_ubf_Nrep <- 10000
+    mscale_abfir_Nrep <- 200
+    mscale_abfir_Np_per_replicate <- 200
+    mscale_enkf_Np <- 10000
+    mscale_bpf_units_per_block <- 1
+    mscale_bpf_Np <- 50
+  } else if(mscale_run_level==5){
+    mscale_replicates <- 5 # number of Monte Carlo replicates
+    mscale_U <- c(40,36,32,28,24,20,16,14,12,10,8,6,4,2)
+    mscale_N <- 5*26
+    mscale_girf_Np <- 2000
+    mscale_girf_lookahead <- 1
+    mscale_girf_nguide <- 40
+    mscale_pfilter_Np <- 100000
+    mscale_abf_Nrep <- 500
+    mscale_abf_Np_per_replicate <- 500
+    mscale_ubf_Nrep <- 20000
+    mscale_abfir_Nrep <- 200
+    mscale_abfir_Np_per_replicate <- 200
+    mscale_enkf_Np <- 10000
+    mscale_bpf_units_per_block <- 4
+    mscale_bpf_Np <- 20000
+  }  else if(mscale_run_level==6){
+    mscale_replicates <- 5 # number of Monte Carlo replicates
+    mscale_U <- c(8,6,4,3,2)
+    mscale_N <- 52
+    mscale_girf_Np <- 2000
+    mscale_girf_lookahead <- 1
+    mscale_girf_nguide <- 50
+    mscale_pfilter_Np <- 100000
+    mscale_abf_Nrep <- 500
+    mscale_abf_Np_per_replicate <- 200
+    mscale_ubf_Nrep <- 40000
+#    mscale_abfir_Nrep <- 200
+#    mscale_abfir_Np_per_replicate <- 200
+    mscale_abfir_Nrep <- 10
+    mscale_abfir_Np_per_replicate <- 10
+    mscale_enkf_Np <- 1000
+    mscale_bpf_units_per_block <- 1
+    mscale_bpf_Np <- 2000
+  } 
+
+})
+
+mscale_jobs <- expand.grid(U=mscale_U,reps=1:mscale_replicates)
+mscale_jobs$U_id <- rep(seq_along(mscale_U),times=mscale_replicates)
+
+@
+
+<<mscale_spatPomp,eval=T,echo=F>>=
+mscale_spatPomp <- stew(file=paste0(mscale_files_dir,"mscale_spatPomp.rda"),{
+
+  mscale_model_dir <-  measles_model_dir
+  # note: care is required if mscale_model_dir is set to something other than measles_model_dir
+  # however, it may be useful to do that while testing model variations.
+  
+  load(file=paste0(mscale_model_dir,"measles_spatPomp.rda"))  
+  mscale_list <- vector("list", length = length(mscale_U))  
+  for(i in 1:length(mscale_U)) mscale_list[[i]] <- measles_subset(m_U=mscale_U[i], m_N=mscale_N)
+})
+@
+
+<<mscale_nbhd,echo=F>>=
+mscale_nbhd <- function(object, time, unit) {
+  nbhd_list <- list()
+  if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+  if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+  return(nbhd_list)
+}
+@
+
+<<mscale_girf,cache=F,echo=F>>=
+mscale_girf <- stew(file=paste0(mscale_files_dir,"mscale_girf.rda"),seed=5981724,{
+  foreach(job=iter(mscale_jobs,"row")) %dopar% {
+    system.time(
+      girf(mscale_list[[job$U_id]], method='adams',
+        Np=mscale_girf_Np,
+        Ninter = job$U,
+        lookahead = mscale_girf_lookahead,
+        Nguide = mscale_girf_nguide,
+        tol = mscale_tol) -> mscale_girf_out 
+    ) -> mscale_girf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(mscale_girf_out),time=mscale_girf_time["elapsed"],mscale_girf_out)
+    list(logLik=logLik(mscale_girf_out),time=mscale_girf_time["elapsed"])
+  } -> mscale_girf_list
+})
+mscale_jobs$girf_logLik <- vapply(mscale_girf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$girf_time <- vapply(mscale_girf_list,function(x) x$time,numeric(1))
+@
+
+<<mscale_bootgirf,cache=F,echo=F>>=
+mscale_bootgirf <- stew(file=paste0(mscale_files_dir,"mscale_bootgirf.rda"),seed=5981724,{
+### begin test
+#mt <- mscale_list[[2]]
+#bootgirf2(mt, method='adams',
+#        Np=100,
+#        Ninter = 4,
+#        lookahead = 2,
+#        Nguide = 10) -> bt
+### end test
+  foreach(job=iter(mscale_jobs,"row")) %dopar% {
+    system.time(
+# job <- mscale_jobs[1,] # for debugging
+      bootgirf2(mscale_list[[job$U_id]], method='adams',
+        Np=mscale_bootgirf_Np,
+        Ninter = job$U,
+        lookahead = mscale_bootgirf_lookahead,
+        Nguide = mscale_bootgirf_nguide,
+        tol = mscale_tol) -> mscale_bootgirf_out
+   ) -> mscale_bootgirf_time   
+#    uncomment for debugging 
+#    list(logLik=logLik(mscale_bootgirf_out),time=mscale_bootgirf_time["elapsed"],mscale_bootgirf_out)
+    list(logLik=logLik(mscale_bootgirf_out),time=mscale_bootgirf_time["elapsed"])
+  } -> mscale_bootgirf_list
+})
+mscale_jobs$bootgirf_logLik <- vapply(mscale_bootgirf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$bootgirf_time <- vapply(mscale_bootgirf_list,function(x) x$time,numeric(1))
+@
+
+
+<<mscale_abf,cache=F,echo=F>>=
+mscale_abf <- stew(file=paste0(mscale_files_dir,"mscale_abf.rda"),seed=844424,{
+  foreach(job=iter(mscale_jobs,"row")) %do% {
+    system.time(
+      abf(mscale_list[[job$U_id]], 
+        Nrep = mscale_abf_Nrep,
+        Np=mscale_abf_Np_per_replicate,
+        nbhd = mscale_nbhd, tol=mscale_tol) -> mscale_abf_out 
+    ) -> mscale_abf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(mscale_abf_out),time=mscale_abf_time["elapsed"],mscale_abf_out)
+    list(logLik=logLik(mscale_abf_out),time=mscale_abf_time["elapsed"])
+  } -> mscale_abf_list
+})
+mscale_jobs$abf_logLik <- vapply(mscale_abf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$abf_time <- vapply(mscale_abf_list,function(x) x$time,numeric(1))
+
+@
+
+<<mscale_ubf,cache=F,echo=F>>=
+mscale_ubf <- stew(file=paste0(mscale_files_dir,"mscale_ubf.rda"),seed=844424,{
+  foreach(job=iter(mscale_jobs,"row")) %do% {
+    system.time(
+      abf(mscale_list[[job$U_id]], 
+        Nrep = mscale_ubf_Nrep,
+        Np=1,
+        nbhd = mscale_nbhd, tol=mscale_tol) -> mscale_ubf_out 
+    ) -> mscale_ubf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(mscale_ubf_out),time=mscale_ubf_time["elapsed"],mscale_ubf_out)
+    list(logLik=logLik(mscale_ubf_out),time=mscale_ubf_time["elapsed"])
+  } -> mscale_ubf_list
+})
+mscale_jobs$ubf_logLik <- vapply(mscale_ubf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$ubf_time <- vapply(mscale_ubf_list,function(x) x$time,numeric(1))
+
+@
+
+<<mscale_abfir,cache=F,echo=F>>=
+mscale_abfir <- stew(file=paste0(mscale_files_dir,"mscale_abfir.rda"),seed=53398,{
+  foreach(job=iter(mscale_jobs,"row")) %do% {
+    system.time(
+      abfir(mscale_list[[job$U_id]], method='adams',
+        Nrep = as.integer(mscale_abfir_Nrep),
+        Np=mscale_abfir_Np_per_replicate,
+        Ninter = as.integer(job$U/2),
+        nbhd = mscale_nbhd, tol=mscale_tol) -> mscale_abfir_out 
+    ) -> mscale_abfir_time
+#    uncomment for debugging 
+#    list(logLik=logLik(mscale_abfir_out),time=mscale_abfir_time["elapsed"],mscale_abfir_out)
+    list(logLik=logLik(mscale_abfir_out),time=mscale_abfir_time["elapsed"])
+  } -> mscale_abfir_list
+})
+mscale_jobs$abfir_logLik <- vapply(mscale_abfir_list,function(x)x$logLik,numeric(1))
+mscale_jobs$abfir_time <- vapply(mscale_abfir_list,function(x) x$time,numeric(1))
+
+@
+
+
+<<mscale_pfilter,cache=F,echo=F>>=
+mscale_pfilter <- stew(file=paste0(mscale_files_dir,"mscale_pfilter.rda"),seed=53285,{
+  foreach(job=iter(mscale_jobs,"row")) %dopar% {
+    system.time(
+      pfilter(mscale_list[[job$U_id]],Np=mscale_pfilter_Np) -> mscale_pfilter_out
+    ) -> mscale_pfilter_time
+#    uncomment for debugging 
+#    list(logLik=logLik(mscale_pfilter_out),time=mscale_pfilter_time["elapsed"],mscale_pfilter_out)
+    list(logLik=logLik(mscale_pfilter_out),time=mscale_pfilter_time["elapsed"])
+  } -> mscale_pfilter_list
+})
+mscale_jobs$pfilter_logLik <- vapply(mscale_pfilter_list,function(x)x$logLik,numeric(1))
+mscale_jobs$pfilter_time <- vapply(mscale_pfilter_list,function(x) x$time,numeric(1))
+@
+
+
+<<mscale_bpf,cache=F,echo=F>>=
+mscale_bpf <- stew(file=paste0(mscale_files_dir,"mscale_bpf.rda"),seed=53285,{
+  foreach(job=iter(mscale_jobs,"row")) %dopar% {
+    system.time(
+      bpfilter(mscale_list[[job$U_id]],
+        Np=mscale_bpf_Np,
+	block_size=mscale_bpf_units_per_block) -> mscale_bpf_out
+    ) -> mscale_bpf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(mscale_bpf_out),time=mscale_bpf_time["elapsed"],mscale_bpf_out)
+    list(logLik=mscale_bpf_out@loglik,time=mscale_bpf_time["elapsed"])
+  } -> mscale_bpf_list
+})
+mscale_jobs$bpf_logLik <- vapply(mscale_bpf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$bpf_time <- vapply(mscale_bpf_list,function(x) x$time,numeric(1))
+@
+
+
+<<mscale_enkf,cache=F,echo=F>>=
+###  genkf(mscale_list[[1]],Np=mscale_enkf_Np) -> mscale_enkf_out
+mscale_enkf <- stew(file=paste0(mscale_files_dir,"mscale_enkf.rda"),seed=53285,{
+  foreach(job=iter(mscale_jobs,"row")) %dopar% {
+    system.time(
+      enkf(mscale_list[[job$U_id]],Np=mscale_enkf_Np) -> mscale_enkf_out
+    ) -> mscale_enkf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(mscale_enkf_out),time=mscale_enkf_time["elapsed"],mscale_enkf_out)
+    list(logLik=logLik(mscale_enkf_out),time=mscale_enkf_time["elapsed"])
+  } -> mscale_enkf_list
+})
+mscale_jobs$enkf_logLik <- vapply(mscale_enkf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$enkf_time <- vapply(mscale_enkf_list,function(x) x$time,numeric(1))
+@
+
+
+
+<<mscale_loglik_plot, echo=F,  fig.height=4, fig.width=5.5, out.width="4.5in", fig.cap = paste('log likelihood estimates for simulated data from the measles model of various dimensions. {\\UBF}, {\\ABF} and {\\ABFIR} are compared with a guided intermediate resampling filter (GIRF), a standard particle filter (PF), a block particle filter (BPF) and an ensemble Kalman filter (EnKF).')>>=
+
+
+# put output in tall format for plotting
+
+#mscale_methods <- c("ABF", "ABF-IR","UBF","GIRF","PF","BPF","EnKF")
+mscale_methods <- c("ABF", "ABF-IR","UBF","GIRF","PF","BPF","EnKF","bootgirf")
+mscale_results <- data.frame(
+  Method=rep(mscale_methods,each=nrow(mscale_jobs)),
+  logLik=c(
+    mscale_jobs$abf_logLik,
+    mscale_jobs$abfir_logLik,
+    mscale_jobs$ubf_logLik,
+    mscale_jobs$girf_logLik,
+    mscale_jobs$pfilter_logLik,
+    mscale_jobs$bpf_logLik,
+    mscale_jobs$enkf_logLik,
+    mscale_jobs$bootgirf_logLik
+  ),
+  Units=rep(mscale_jobs$U,reps=length(mscale_methods))
+)
+mscale_point_perturbation <- 0.25
+mscale_results$U <- mscale_results$Units+
+  rep( mscale_point_perturbation*seq(from=-1,to=1,length=length(mscale_methods)),
+    each=nrow(mscale_jobs))
+mscale_results$logLik_per_unit <- mscale_results$logLik/mscale_results$Units
+mscale_results$logLik_per_obs <- mscale_results$logLik_per_unit/mscale_N
+
+save(file=paste0(mscale_files_dir,"mscale_results.rda"),mscale_results,mscale_jobs)
+
+mscale_max <- max(mscale_results$logLik_per_obs)
+
+ggplot(mscale_results,mapping = aes(x = U, y = logLik_per_obs, group=Method,color=Method,linetype=Method,shape=Method)) +
+  scale_linetype_manual(values=c(1,1,1,1,2,2,2,3)) +
+  scale_shape_manual(values=c(1,2,4,5,1,2,4,3)) +
+#  scale_color_manual(values=c(1,2,3,4,5,6,8))+
+  scale_color_manual(values=cbPalette[c(2:8,1)])+
+  geom_point() +
+  stat_summary(fun=mean, geom="line") +
+  coord_cartesian(ylim=c(mscale_max-2,mscale_max))+
+  theme(legend.key.width = unit(1,"cm"))+
+  ylab("log likelihood per observation")
+
+
+@
+
+
+
+This model includes many features that have been proposed to be relevant for understanding measles transmission dynamics \citep{he10}.
+Our plug-and-play methodology permits consideration of all these features, and readily extends to the investigation of further variations. 
+Likelihood-based inference via plug-and-play methodology therefore provides a framework for evaluating which features of a dynamical model are critical for explaining the data \citep{king08}.
+By contrast, \cite{xia04} developed a linearization for a specific spatiotemporal measles model which is numerically convenient but not readily adaptable to assess alternative model choices.
+Fig.~\ref{fig:measles_image_plot} shows a simulation from our model, showing that trajectories from this model can capture some features of the system that have been hard to understand: how can it be that disease transmission dynamics between locations have important levels of interaction yet are not locked in synchrony \citep{becker20}?
+Here, we are developing statistical tools rather than engaging directly in the scientific debate.
+
+We first assess the scaling properties of the filters on the measles model by evaluating the likelihood over varying numbers of units, $\Unit$, for fixed parameters.
+The results are given in Fig.~\ref{fig:mscale_loglik_plot}, with additional information about timing, algorithmic choices, parameter values and a plot of the data provided in Sec.~\SuppSecMeasles.
+In Fig.~\ref{fig:mscale_loglik_plot}, the log likelihood per unit per time increases with $\Unit$ because city size decreases with $\Unit$. 
+Smaller cities have fewer measles cases, resulting in a narrower and taller probability density function.
+Fig.~\ref{fig:mscale_loglik_plot} shows a rapid decline in the performance of the particle filter (PF) beyond $\Unit=4$.
+This is a challenging filtering problem, with dynamics including local fadeouts and high stochasticity in each city stabilized at the metapopulation level by the coupling.
+In this example, GIRF performs poorly suggesting that the simulated moment guide function is less than successful.
+We used the general-purpose implementation of GIRF in the \code{spatPomp} package, and there might be room for improvement by developing a model-specific guide function.
+{\ABFIR} uses the same guide function, and this may explain why {\ABFIR} performs worse than {\ABF} here, though {\ABFIR} is much less sensitive than GIRF to the quality of the guide.
+{\ABF} and {\UBF} are competing with BPF as winners on this challenge.
+The bagged filters and BPF have substantial advantages compared to EnKF, amounting to more than 0.2 log likelihood units per observation.
+We suspect that the limitations of EnKF on this problem are due to the nonlinearity, non-Gaussianity, and discreteness of fadeout and reintroduction dynamics.
+All the algorithms have various tuning parameters that could influence the results. 
+Some investigations of alternatives are presented in the Sec.~\SuppSecMeasles.
+Generalizable conclusions are hard to infer from numerical comparisons of complex algorithms on complex models.
+Experimentation with different methods, and their tuning parameters, is recommended when investigating a new model.
+
+
+<<slice_settings,echo=F,eval=T>>=
+
+slice_files_dir <- paste0("slice_",slice_run_level,"/")
+if(!dir.exists(slice_files_dir)) dir.create(slice_files_dir)
+
+stew(file=paste0(slice_files_dir,"slice_settings.rda"),{
+
+  # copy variables that should be included in the stew
+  slice_run_level <- slice_run_level 
+  slice_cores <- cores
+
+  g_lo <- 200
+  g_hi <- 600
+
+  g_bpf_lo <- g_lo
+  g_bpf_hi <- g_hi
+
+#  g_enkf_lo <- 50
+#  g_enkf_hi <- 750  
+
+   g_enkf_lo <- g_lo
+   g_enkf_hi <- g_hi
+
+  if(slice_run_level==1){
+    slice_Ntheta <- 5
+    slice_U <- 4
+    slice_N <- 3
+    slice_replicates <- 2
+    slice_abf_Nrep <- 3
+    slice_abf_Np_per_replicate <- 10
+    slice_bpf_units_per_block <- 1
+    slice_bpf_Np <- 100
+    slice_ubf_Nrep <- 5
+    slice_enkf_Np <- 20
+}
+
+
+  if(slice_run_level==2){
+    slice_Ntheta <- 10
+    slice_U <- 20
+    slice_N <- 10*26
+    slice_replicates <- 2 # number of Monte Carlo replicates
+    slice_abf_Nrep <- 200
+    slice_abf_Np_per_replicate <- 50
+    slice_bpf_units_per_block <- 1
+    slice_bpf_Np <- 5000
+    slice_ubf_Nrep <- 5000
+    slice_enkf_Np <- 5000
+  }
+
+  if(slice_run_level==3){
+    slice_Ntheta <- 10
+    slice_replicates <- 4 # number of Monte Carlo replicates
+    slice_U <- 40
+    slice_N <- 15*26
+    slice_abf_Nrep <- 1000
+    slice_abf_Np_per_replicate <- 100
+    slice_bpf_units_per_block <- 2
+    slice_bpf_Np <- 40000
+    slice_ubf_Nrep <- 40000
+    slice_enkf_Np <- 25000
+  }
+
+  if(slice_run_level==4){
+    slice_Ntheta <- 12
+    slice_replicates <- 5 # number of Monte Carlo replicates
+    slice_U <- 40
+    slice_N <- 15*26
+    slice_abf_Nrep <- 5000
+    slice_abf_Np_per_replicate <- 100
+    slice_bpf_units_per_block <- 2
+    slice_bpf_Np <- 40000
+    slice_ubf_Nrep <- 40000
+    slice_enkf_Np <- 5000
+  }
+
+
+})
+@
+
+<<slice_spatPomp,eval=T,echo=F>>=
+slice_spatPomp <- stew(file=paste0(slice_files_dir,"slice_spatPomp.rda"),{
+
+  slice_model_dir <-  measles_model_dir
+  # note: care is required if slice_model_dir is set to something other than measles_model_dir
+  # however, it may be useful to do that while testing model variations.
+  
+  load(file=paste0(slice_model_dir,"measles_spatPomp.rda"))
+  slice_sim <- measles_subset(m_U=slice_U, m_N=slice_N)
+
+  slice_sliceJobs <- slice_design(
+    center=coef(slice_sim),
+    g=rep(seq(from=g_lo,to=g_hi,length=slice_Ntheta),each=slice_replicates)
+  )
+
+  slice_bpf_sliceJobs <- slice_design(
+    center=coef(slice_sim),
+    g=rep(seq(from=g_bpf_lo,to=g_bpf_hi,length=slice_Ntheta),each=slice_replicates)
+  )
+
+  slice_enkf_sliceJobs <- slice_design(
+    center=coef(slice_sim),
+    g=rep(seq(from=g_enkf_lo,to=g_enkf_hi,length=slice_Ntheta),each=slice_replicates)
+  )
+
+})
+@
+
+
+<<slice_nbhd,echo=F>>=
+slice_nbhd <- function(object, time, unit) {
+  nbhd_list <- list()
+  if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+  if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+  return(nbhd_list)
+}
+@
+
+
+
+<<slice_abf, eval=T, cache=F,echo=F>>=
+slice_abf_files <- paste0(slice_files_dir,"slice_abf",1:nrow(slice_sliceJobs),".rda")
+# parallelization is carried out within abf so we use a serial foreach
+foreach (slice_row=1:nrow(slice_sliceJobs), .combine=rbind) %do% {
+  slice_abf <- stew(file=slice_abf_files[slice_row],seed=4000817+slice_row,{
+    theta <- unlist(slice_sliceJobs[slice_row,names(coef(slice_sim))])
+    system.time(
+      abf(slice_sim,params=theta, 
+        Nrep = slice_abf_Nrep,
+        Np=slice_abf_Np_per_replicate,
+        nbhd = slice_nbhd,tol=1e-300
+      ) -> abf1
+    ) -> slice_abf_time
+    abf_logLik <- logLik(abf1)
+    rm(abf1)
+  })
+  c(logLik=abf_logLik,theta, Np=slice_abf_Np_per_replicate,
+    Nrep = slice_abf_Nrep, U=length(unit_names(slice_sim)), N=length(time(slice_sim)),
+    time=slice_abf_time["elapsed"]
+  )
+} -> slice_abf_results
+
+@
+
+<<slice_ubf, eval=T, cache=F,echo=F>>=
+slice_ubf_files <- paste0(slice_files_dir,"slice_ubf",1:nrow(slice_sliceJobs),".rda")
+# parallelization is carried out within ubf so we use a serial foreach
+foreach (slice_row=1:nrow(slice_sliceJobs), .combine=rbind) %do% {
+  slice_ubf <- stew(file=slice_ubf_files[slice_row],seed=4000817+slice_row,{
+    theta <- unlist(slice_sliceJobs[slice_row,names(coef(slice_sim))])
+    system.time(
+      abf(slice_sim,params=theta, 
+        Nrep = slice_ubf_Nrep,
+        Np=1,
+        nbhd = slice_nbhd,tol=1e-300
+      ) -> ubf1
+    ) -> slice_ubf_time
+    ubf_logLik <- logLik(ubf1)
+    rm(ubf1)
+  })
+  c(logLik=ubf_logLik,theta,
+    Nrep = slice_ubf_Nrep, U=length(unit_names(slice_sim)), N=length(time(slice_sim)),
+    time=slice_ubf_time["elapsed"]
+  )
+} -> slice_ubf_results    
+
+@
+
+
+
+<<slice_abfir,eval=F,cache=F,echo=F>>=
+slice_abfir_files <- paste0(slice_files_dir,"slice_abfir",1:nrow(slice_sliceJobs),".rda")
+# parallelization is carried out within abfir so we use a serial foreach
+foreach (slice_row=1:nrow(slice_sliceJobs), .combine=rbind) %do% {  
+  slice_abfir <- stew(file=slice_abfir_files[slice_row],seed=4000817+slice_row,{
+    theta <- unlist(slice_sliceJobs[slice_row,names(coef(slice_sim))])
+    system.time(
+      abfir(slice_sim,params=theta,  method='adams',
+        Nrep = slice_abfir_Nrep,
+        Np=slice_abfir_Np_per_replicate,
+        nbhd = slice_nbhd,
+        Ninter = as.integer(slice_U/2),
+        tol = 1e-300
+      ) -> abfir1
+    ) -> slice_abfir_time
+    abfir_logLik <- logLik(abfir1)
+    rm(abfir1)
+  })    
+  c(logLik=abfir_logLik,theta, Np=slice_abfir_Np_per_replicate,
+      Nrep = slice_abfir_Nrep, U=length(unit_names(slice_sim)), N=length(time(slice_sim)),
+      time=slice_abfir_time["elapsed"]
+  )
+} -> slice_abfir_results 
+@
+
+<<slice_bpf,cache=F,echo=F,eval=T>>=
+slice_bpf_files <- paste0(slice_files_dir,"slice_bpf",1:nrow(slice_bpf_sliceJobs),".rda")
+foreach (slice_row=1:nrow(slice_bpf_sliceJobs), .combine=rbind) %dopar% {
+  theta_eval <<- unlist(slice_bpf_sliceJobs[slice_row,names(coef(slice_sim))])
+  stew(file=slice_bpf_files[slice_row],seed=4000817+slice_row,{
+    theta <- theta_eval
+    system.time(
+      bpfilter(slice_sim,params=theta,
+        Np=slice_bpf_Np,
+	block_size=slice_bpf_units_per_block
+      ) -> slice_bpf_out
+    ) -> slice_bpf_time
+    bpf_logLik <- slice_bpf_out@loglik
+    rm(slice_bpf_out)
+  })
+  c(logLik=bpf_logLik,theta, Np=slice_bpf_Np,
+    units_per_block = slice_bpf_units_per_block,
+    U=length(unit_names(slice_sim)), N=length(time(slice_sim)),
+    time=slice_bpf_time["elapsed"]
+  )
+} -> slice_bpf_results    
+@
+
+
+<<slice_enkf,cache=F,echo=F,eval=T>>=
+
+slice_enkf_files <- paste0(slice_files_dir,"slice_enkf",1:nrow(slice_enkf_sliceJobs),".rda")
+foreach (slice_row=1:nrow(slice_enkf_sliceJobs), .combine=rbind) %dopar% {
+  theta_eval <<- unlist(slice_enkf_sliceJobs[slice_row,names(coef(slice_sim))])
+  stew(file=slice_enkf_files[slice_row],seed=4000817+slice_row,{
+    theta <- theta_eval
+    # an extra step due to bug identified in enkf()
+    sim_tmp <- slice_sim
+    coef(sim_tmp) <- theta
+    system.time(
+      enkf(sim_tmp,
+        Np=slice_enkf_Np
+      ) -> slice_enkf_out
+    ) -> slice_enkf_time
+    enkf_logLik <- slice_enkf_out@loglik
+    rm(slice_enkf_out)
+    rm(sim_tmp)
+  })
+  c(logLik=enkf_logLik,theta, Np=slice_enkf_Np,
+    U=length(unit_names(slice_sim)), N=length(time(slice_sim)),
+    time=slice_enkf_time["elapsed"]
+  )
+} -> slice_enkf_results    
+@
+
+<<slice_mcap,eval=T,echo=F>>=
+
+slice_abf_mcap <- panelPomp::mcap(
+  lp=slice_abf_results[,"logLik"],
+  parameter=slice_abf_results[,"g"],
+  lambda = 1
+)
+
+slice_ubf_mcap <- panelPomp::mcap(
+  lp=slice_ubf_results[,"logLik"],
+  parameter=slice_ubf_results[,"g"],
+  lambda = 0.8
+)
+
+slice_bpf_mcap <- panelPomp::mcap(
+  lp=slice_bpf_results[,"logLik"],
+  parameter=slice_bpf_results[,"g"],
+  lambda = 1
+)
+
+slice_enkf_mcap <- panelPomp::mcap(
+  lp=slice_enkf_results[,"logLik"],
+  parameter=slice_enkf_results[,"g"],
+  lambda = 1
+)
+
+  
+plot.profile2 <- function(mcap1,ylab,xline=2.5,yline=2.5,xlab="",quadratic=FALSE,...){
+  if(missing(ylab)) ylab <- "log likelihood"
+  # par(mai=c(0.7,0.7,0.3,0.3))
+  ggplot() + geom_point(aes(x = mcap1$parameter, y = mcap1$lp)) + 
+    geom_line(mapping = aes(x = mcap1$fit$parameter, y = mcap1$fit$smoothed),
+              color = "red") +
+    {if(quadratic) geom_line(mapping = aes(x = mcap1$fit$parameter, y = mcap1$fit$quadratic),
+                             color = "blue",
+                             lwd = 1.25)} +
+    labs(x = xlab, y = ylab) +
+    geom_vline(xintercept = mcap1$ci, color = "red") + 
+    geom_hline(yintercept = max(mcap1$fit$smoothed, na.rm = T) - mcap1$delta, color = "red") +
+    theme(panel.border = element_rect(colour = "black", fill=NA))
+  }
+
+@
+
+<<slice_abf_plot, eval = F, echo=F,  fig.height=4, fig.width=5.5, out.width="4.5in", fig.cap = paste('Likelihood slice varying the coupling parameter, computed via {\\ABF} with $U=40$ cities. The solid lines construct a 95\\% Monte Carlo adjusted confidence interval \\citep{ionides17}. For this model realization, this interval includes the true parameter value identified by a blue dashed line.')>>=
+
+if(0){
+slice_results <- as.data.frame(rbind(
+  slice_abf_results[,c("logLik","g")],
+  slice_bpf_results[,c("logLik","g")]
+))
+slice_results$Method <- rep( c("ABF", "BPF"),each=nrow(slice_sliceJobs))
+} else {
+  slice_results <-  as.data.frame(slice_abf_results[,c("logLik","g")])
+  slice_results$Method <- rep("ABF",each=nrow(slice_sliceJobs))
+}
+
+plot.profile2(slice_abf_mcap,xlab="G", quadratic = FALSE) +
+  geom_vline(xintercept=measles_params["g"],color="blue",linetype="dashed")
+
+@
+
+<<slice_bpf_plot, eval = F, echo=F,  fig.height=4, fig.width=5.5, out.width="4.5in", fig.cap = paste('Likelihood slice varying the coupling parameter, computed via {BPF} with $U=40$ cities. The solid lines construct a 95\\% Monte Carlo adjusted confidence interval \\citep{ionides17}. For this model realization, this interval includes the true parameter value identified by a blue dashed line.')>>=
+
+
+plot.profile2(slice_bpf_mcap,xlab="G", quadratic = FALSE) +
+  geom_vline(xintercept=measles_params["g"],color="blue",linetype="dashed")
+
+@
+
+
+<<slice_enkf_plot, eval = F, echo=F,  fig.height=4, fig.width=5.5, out.width="4.5in", fig.cap = paste('Likelihood slice varying the coupling parameter, computed via {EnKF} with $U=40$ cities. The solid lines construct a 95\\% Monte Carlo adjusted confidence interval \\citep{ionides17}. For this model realization, this interval includes the true parameter value identified by a blue dashed line.')>>=
+
+
+plot.profile2(slice_enkf_mcap,xlab="G", quadratic = FALSE) +
+  geom_vline(xintercept=measles_params["g"],color="blue",linetype="dashed")
+
+@
+
+
+
+<<slice_ubf_plot, eval = F, echo=F,  fig.height=4, fig.width=5.5, out.width="4.5in", fig.cap = paste('Likelihood slice varying the coupling parameter, computed via {\\UBF} with $U=40$ cities. The solid lines construct a 95\\% Monte Carlo adjusted confidence interval \\citep{ionides17}. For this model realization, this interval includes the true parameter value identified by a blue dashed line.')>>=
+
+
+plot.profile2(slice_ubf_mcap,xlab="G", quadratic = FALSE) +
+  geom_vline(xintercept=measles_params["g"],color="blue",linetype="dashed")
+
+@
+
+
+<<slice_combined_plot, echo=F, fig.height=6, fig.width=4, out.height="7in", fig.cap = paste('Likelihood slices varying the coupling parameter, for the measles model with $U=40$ cities, computed via (A) {ABF}; (B) BPF; (C) EnKF. The solid perpendicular lines construct 95\\% Monte Carlo adjusted confidence intervals \\citep{ionides17}. The true parameter value is identified by a blue dashed line.')>>=
+
+plot.profile <- function(mcap1,ylab,xline=2.5,yline=2.5,xlab="",...){
+  if(missing(ylab)) ylab <- "log likelihood"
+  plot(mcap1$lp ~ mcap1$parameter, xlab="",ylab="",xaxt="n",...)
+  mtext(side=2,text=ylab,line=yline)
+  mtext(side=1,text=xlab,line=yline)
+  lines(mcap1$fit$parameter,mcap1$fit$smoothed, col = "red", lwd = 1.5)
+  abline(v=mcap1$ci,col="red")
+  abline(h=max(mcap1$fit$smoothed,na.rm=T)-mcap1$delta,col="red")
+}
+
+#pdf(file="tmp.pdf",height=7,width=3.5)
+
+par(omi=c(0.5,0.1,0.1,0.1))
+par(mai=c(0.1,0.7,0.1,0.1))
+par(mfrow=c(3,1))
+
+plot.profile(slice_abf_mcap,xlab=""
+# ,ylab="log likelihood (ABF)"
+)
+axis(side=1,labels=F)
+abline(v=measles_params["g"],col="blue",lty="dashed")
+
+yloc <- 0.05; xloc <- 570
+mtext("A",side=2,line=2.5,las=1,padj=-4,cex=1.8)
+text(xloc,
+  (1-yloc)*min(slice_abf_mcap$lp) + yloc*max(slice_abf_mcap$lp),
+  cex=1.4,"ABF")
+
+plot.profile(slice_bpf_mcap,xlab="")
+axis(side=1,labels=F)
+abline(v=measles_params["g"],col="blue",lty="dashed")
+
+mtext("B",side=2,line=2.5,las=1,padj=-4,cex=1.8)
+text(xloc,
+  (1-yloc)*min(slice_bpf_mcap$lp) + yloc*max(slice_bpf_mcap$lp),
+  cex=1.4,"BPF")
+
+
+plot.profile(slice_enkf_mcap,xlab="")
+axis(side=1,labels=T)
+abline(v=measles_params["g"],col="blue",lty="dashed")
+
+mtext("C",side=2,line=2.5,las=1,padj=-4,cex=1.8)
+mtext("G",side=1,line=2.5)
+text(xloc,
+  (1-yloc)*min(slice_enkf_mcap$lp) + yloc*max(slice_enkf_mcap$lp),
+  cex=1.4,"EnKF")
+
+@
+
+
+Fig.~\ref{fig:slice_combined_plot}(A) demonstrates an application of {\ABF} to the task of computing a slice of the likelihood function over the coupling parameter, $\gravity$, for simulated data.
+This slice varies $\gravity$ while fixing the other parameters at the values used for the simulation.
+Scientifically, this gives us an upper bound on the identifiability of $\gravity$ from such data, since the likelihood slice provides statistically efficient inference when all other parameters are known.
+In this case, the Monte Carlo error is comparable to the change in the log likelihood over a wide range of values of $\gravity$. 
+Fig.~\ref{fig:slice_combined_plot}(B) shows a similar plot calculated using BPF with comparable computational effort.
+Both ABF and BPF are successful here, though BPF is more computationally efficient.
+By contrast, Fig.~\ref{fig:slice_combined_plot}(C) shows that EnKF has substantial bias in estimating $\gravity$, as well as considerably lower likelihood. 
+
+%Fig~\ref{fig:slice_abf_plot} took $\Sexpr{myround(mean(slice_abf_results[,"time.elapsed"]*gl_cores/60),1)}$ core minutes to evaluate each point using a parallelized implementation on a computing node with $\Sexpr{gl_cores}$ cores, corresponding to a run time of  $\Sexpr{myround(mean(slice_abf_results[,"time.elapsed"]/60),1)}$ per likelihood evaluation.
+%By contrast, Fig~\ref{fig:slice_bpf_plot} took $\Sexpr{myround(mean(slice_bpf_results[,"time.elapsed"]/60),1)}$ minutes per likelihood evaluation on a single core.
+%
+%, equivalent in effort to $\Sexpr{myround(mean(slice_bpf_results[,"time.elapsed"]/60/gl_cores),1)}$ minutes for a parallel implementation.
+%
+%and Fig~\ref{fig:slice_ubf_plot} took $\Sexpr{myround(mean(slice_ubf_results[,"time.elapsed"]/60),1)}$ minutes,
+
+%%% dddddddddddddd
+
+
+
+\section{Discussion}
+
+The pseudocode presented for the bagged filters describes how the outputs are calculated given the inputs, but does not prescribe details of how these quantities are calculated. 
+There is scope for implementations to trade off memory, computation and communication by making differing decisions on how the various loops defined in the pseudocode are coded, such as decisions on memory over-writing and parallelization.
+This article focuses on  the logical structure of the algorithms, leaving room for future research on implementation-specific considerations, though some supplementary discussion of memory-efficient implementation is given in Sec.~\SuppSecMemoryEfficient.
+
+This article has not exhausted the possibilities for bagging different PF algorithms.
+Bagging a standard PF is one possibility, but the algorithm becomes rapidly degenerate due to COD.
+Our approach has been to bag PF variants that are already degenerate, so there is less scope for COD to damage them.
+Alternatively, one could bag PF variants that avoid the COD by using local weights themselves.
+
+We have focused on likelihood evaluation, a critical quantity for testing scientific hypotheses about model structure and the values of unknown parameters.
+However, our bagged filters also provide localized solutions to the filtering problem, using the local weights to combine estimates across replicates.
+A solution to the filtering problem, in turn, provides a foundation for forecasting.
+Effective filtering and likelihood evaluation can enable likelihood maximization via iterated filtering algorithms \citep{ionides11,ionides15}.
+
+Plug-and-play inference based on sequential Monte Carlo likelihood evaluation has proved successful for investigating highly nonlinear partially observed dynamic systems of low dimension arising in analysis of epidemiological and ecological time series data \citep{breto18statSci,pons-salort18,decelles18,marino18}.
+A benefit of the plug-and-play property is that it facilitates development of broadly applicable software, which in turn promotes creative scientific model development \citep{breto09,he10}.
+
+Geophysical data assimilation has similarities to inference on spatiotemporal biological systems.
+Relative to biological systems, geophysical applications are characterized by a greater number of spatial locations, better mathematical understanding of the underlying processes, and lower stochasticity.
+From this literature, the locally weighted particle filter of \citep{poterjoy16} is perhaps closest to our approach, but those local weights are used to construct a localized Kalman gain which is motivated by a Gaussian approximation.
+
+The EnKF algorithm arose originally via geophysical research \citep{evensen96} and has since become used more widely for inference on SpatPOMP models \citep{katzfuss19,lei10}.
+However, EnKF can fail entirely even on simple POMP models if the structure is sufficiently non-Gaussian.
+For example, let $X_n$ be a one-dimensional Gaussian random walk, and let $Y_n$ given $X_n=x_n$ be normally distributed with mean $0$ and variance $x_n^2$.
+The linear filter rule used by EnKF to update the estimate of $X_n$ given $Y_n$ has mean zero for any value of $X_n$, since $X_n$ and $Y_n$ are uncorrelated.
+Therefore, the EnKF filter estimate of the latent process remains essentially constant regardless of the data.
+Models of this form are used in finance to describe stochastic volatility.
+EnKF could be applied more successfully by modifying model, such as replacing $Y_n$ by $|Y_n|$, but for complex models it may be unclear whether and where such problems are arising.
+Our results show that there is room for improvement over EnKF on a spatiotemporal epidemiology model, though in our example there is no clear advantage for BF methods over BPF.
+
+Latent state trajectories constructed in our BF algorithms are all generated from the model simulator, appropriately reweighted and resampled, and so are necessarily valid sample paths of the model.
+For example, spatial smoothness properties of the model through space, or conservation properties where some function of the system remains unchanged through time, are maintained in the BF trajectories.
+This is not generally true for the block particle filter (since resampling blocks can lead to violations at block boundaries) or for EnKF (since the filter procedure perturbs particles using a linear update rule that cannot respect nonlinear relationships).
+The practical importance of smoothness and conservation considerations will vary with the system under investigation, but this property of BF gives the scientific investigator one less thing to worry about. 
+
+
+The algorithms {\UBF}, {\ABF}, {\ABFIR}, GIRF, PF, BPF, and EnKF compared in this article all enjoy the plug-and-play property, facilitating their implementations in general-purpose software.
+The numerical results for this paper use the \code{abf}, \code{abfir}, \code{girf}, \code{pfilter}, \code{bpfilter} and \code{enkf} functions via the open-source R package \code{spatPomp} \citep{asfaw20github} that provides a spatiotemporal extension of the R package \code{pomp} \citep{king16}.
+{\UBF} was implemented using \code{abf} with $\Np=1$ particles per replicate.
+The source code for this paper will be contributed to an open-source scientific archive upon acceptance for publication.
+
+
+\bibliography{bib-iif}
+
+\end{document}

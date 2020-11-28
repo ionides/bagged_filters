@@ -1,0 +1,24 @@
+20-08-24
+results changing the Lorenz bagged filter nbhd to
+
+lz_nbhd2 <- function(object, time, unit) {
+  nunits <- length(unit_names(object))
+  nbhd_list <- list()
+  if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+  if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+  return(nbhd_list)
+
+from
+
+lz_nbhd <- function(object, time, unit) {
+  nunits <- length(unit_names(object))
+  nbhd_list <- list()
+  if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+  if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+  if(unit>1) nbhd_list <- c(nbhd_list, list(c(unit-1, time)))
+  if(unit>2) nbhd_list <- c(nbhd_list, list(c(unit-2, time)))
+  return(nbhd_list)
+}
+
+this made things a bit worse.
+

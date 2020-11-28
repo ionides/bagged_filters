@@ -1,0 +1,3049 @@
+\documentclass[11pt]{article}
+
+%%% JASA. Attention Mac Users. The latest version of the pdfTex compiler for Mac (pdfTeX-1.40.11) outputs files not currently supported by ScholarOne Manuscripts. To resolve this and have a PDF file that will convert properly, the PDF file will need to be distilled to Adobe version 1.4 or earlier. To create a PDF file that uploads correctly, place the command \pdfminorversion=4 in the preamble (before the begin{document}) of your LaTeX file and run pdfLaTeX again.
+
+\pdfminorversion=4
+
+<<debug,echo=F>>=
+#run_level <- 1
+#run_level <- "jasa-sept-2020"
+run_level <- 2
+abfNbhd_run_level <- run_level
+lz_run_level <- run_level
+bm_run_level <- run_level
+mscale_run_level <- run_level
+slice_run_level <- run_level
+
+if(run_level=="jasa-sept-2020"){  
+#### values used for jasa submission, sept 2020  
+  abfNbhd_run_level <- 3
+  lz_run_level <- 5
+  bm_run_level <- 4
+  mscale_run_level <- 5
+  slice_run_level <- 3
+}
+
+@
+
+\newcommand\secTitleSpace{\hspace{3mm}}
+
+<<packages,include=F,cache=F>>=
+library("ggplot2")
+#library("xtable")
+library("spatPomp")
+library(doParallel)
+library(doRNG)
+
+cores <-  as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset=NA))
+if(is.na(cores)) cores <- detectCores()  
+registerDoParallel(cores)
+
+gl_cores <- 36
+doob_cores <- 40
+ito_cores <- 8
+
+<<set-opts,include=F,cache=F>>=
+
+options(
+        scipen=2,
+        help_type="html",
+        stringsAsFactors=FALSE,
+        prompt="R> ",
+        continue="+  ",
+        width=70,
+        useFancyQuotes=FALSE,
+        reindent.spaces=2,
+        xtable.comment=FALSE
+        )
+@
+
+<<knitr-opts,include=F,cache=F,purl=F>>=
+library("knitr")
+opts_knit$set(concordance=TRUE)
+opts_chunk$set(
+    progress=TRUE,prompt=TRUE,highlight=FALSE,
+    tidy=TRUE,
+    tidy.opts=list(
+        keep.blank.line=FALSE
+    ),
+    comment="",
+    warning=FALSE,
+    message=FALSE,
+    error=TRUE,
+    echo=TRUE,
+    cache=FALSE,
+    strip.white=TRUE,
+    results="markup",
+    background="#FFFFFF00",
+    size="normalsize",
+    fig.path="figure/",
+    fig.lp="fig:",
+    fig.align="left",
+    fig.show="asis",
+#    dpi=300,
+    dev="pdf",
+    dev.args=list(
+        bg="transparent",
+        pointsize=9
+    )
+)
+
+myround<- function (x, digits = 1) {
+  # taken from the broman package
+  if (digits < 1) 
+    stop("This is intended for the case digits >= 1.")
+  if (length(digits) > 1) {
+    digits <- digits[1]
+    warning("Using only digits[1]")
+  }
+  tmp <- sprintf(paste("%.", digits, "f", sep = ""), x)
+  zero <- paste0("0.", paste(rep("0", digits), collapse = ""))
+  tmp[tmp == paste0("-", zero)] <- zero
+  tmp
+}
+
+@
+
+%% copied from pnas-new.cls
+\usepackage{amsmath,amsfonts,amssymb,graphicx} 
+
+\input{header-ms.tex}
+\input{theorems.tex}
+
+
+\renewcommand\siOnly[1]{#1}
+\renewcommand\msOnly[1]{} 
+
+\bibliographystyle{apalike}
+%% added or modified from pnas-new.cls
+\usepackage{natbib} 
+\usepackage{fullpage}
+\renewcommand\myeqref[1]{(\ref{#1})}
+
+
+%\usepackage{relsize}
+
+%\templatetype{pnassupportinginfo}
+
+% \readytosubmit %% Uncomment this line before submitting, so that the instruction page is removed.
+
+%\author{Author1, Author2 and Author3 (Complete author list)}
+%\correspondingauthor{Corresponding Author Name.\\E-mail: author.two@email.com}
+
+\renewcommand{\contentsname}{Supplementary Content}
+\renewcommand{\refname}{Supplementary References}
+\renewcommand\thefigure{S-\arabic{figure}}
+\renewcommand\thetable{S-\arabic{table}}
+%\renewcommand\thepage{S-\arabic{page}}
+\renewcommand\thesection{S\arabic{section}}
+\renewcommand\theequation{S\arabic{equation}}
+\renewcommand\theprop{S\arabic{prop}}
+\renewcommand\thelemma{S\arabic{lemma}}
+
+\setcounter{tocdepth}{1} 
+
+\begin{document}
+
+%% Comment/remove this line before generating final copy for submission 
+%\instructionspage  
+
+\date{\today}
+\title{Supplement to ``{\mytitle}''}
+\author{E. L. Ionides, K. Asfaw, J. Park and A. A. King}
+
+\newcommand{\blind}{1}
+
+\if1\blind
+{
+\maketitle
+}
+\fi
+
+\if0\blind
+{
+  \bigskip
+  \bigskip
+  \bigskip
+  \begin{center}
+    {\LARGE\bf \mytitle}
+\end{center}
+  \bigskip
+  \bigskip
+}\fi
+
+%% Adds the main heading for the SI text. Comment out this line if you do not have any supporting information text.
+
+%\SItext 
+
+%Draft: \today
+
+\tableofcontents
+
+\newpage
+
+\section{\secTitleSpace A generalization to models without latent unit structure}
+
+Variations of the algorithms in the main text apply when there is no latent unit structure. 
+In this case, the observation vector $\myvec{Y}_{\time}=(Y_{1,\time},\dots,Y_{\Unit,\time})$ consists of a collection of measurements on a general latent vector ${X}_{\time}$.
+We may have the structure that $Y_{1,\time},\dots,Y_{\Unit,\time}$ are conditionally independent given ${X}_{\time}$, but even this is not essential to the approach.
+This is most readily seen in the context of the unadapted bagged filter, giving rise to the generalized unadapted bagged filter (G-{\UBF}) algorithm defined as follows.
+
+\begin{center}
+\noindent\begin{tabular}{l}
+\hline
+{\bf Algorithm~G-{\UBF} (Generalized unadapted bagged filter).}\rule[-1.5mm]{0mm}{6mm}\\
+\hline
+{\bf input:}\rule[-1.5mm]{0mm}{6mm} \\
+Simulator for $f_{{X}_{\time}|{X}_{\time-1}}({x}_{\time}|{x}_{\time-1})$\\
+Evaluator for $f_{Y_{\unit,\time}|{X}_{\time}}(\data{y}_{\unit,\time}\given {x}_{\time})$\\
+Number of bootstrap filters, $\Rep$\\
+Neighborhood structure, $B_{\unit,\time}$, for $\unit\in 1\mycolon\Unit$ and $\time\in 1\mycolon\Time$\\
+Data, $\data{y}_{\unit,\time}$ for $\unit\in 1\mycolon\Unit$ and $\time\in 1\mycolon\Time$ \\
+{\bf output:}\rule[-1.5mm]{0mm}{5mm} \\
+Log likelihood estimate, $\MC{\loglik}= \sum_{\time=1}^\Time\sum_{\unit=1}^\Unit \MC{\loglik}_{\unit,\time}$  \rule[-2mm]{0mm}{3mm}
+\\
+\hline
+For $\rep$ in $1\mycolon\Rep$ \rule[-1.5mm]{0mm}{6mm}
+\\
+\asp simulate ${X}_{\time,\rep}^{\simulation}$ from the dynamic model, for $\time\in 1{\mycolon}\Time$\\
+End For\\
+Prediction weights, 
+$w^P_{\unit,\time,\rep}= f_{Y_{B_{\unit,\time}}|{X}_{1:\time}}(\data{y}_{B_{\unit,\time}}\given {X}^{\simulation}_{1:\time,\rep})$\\
+Measurement weights,
+$w^M_{\unit,\time,\rep}=f_{Y_{\unit,\time}|X_{\time},Y_{B_{\unit,\time}}}(\data{y}_{\unit,\time}\given X^{\simulation}_{\time,\rep},\data{y}_{B_{\unit,\time}})$
+\\
+Conditional log likelihood estimate,
+$\MC{\loglik}_{\unit,\time}= 
+\log \left(
+  \sum_{\rep=1}^\Rep w^M_{\unit,\time,\rep}\,   w^P_{\unit,\time,\rep}
+\right)
+-
+\log \left(
+    \sum_{\tilde \rep=1}^\Rep w^P_{\unit,\time,\tilde \rep}
+\right)
+$
+\\
+\hline
+\end{tabular}
+\end{center}
+
+The algorithm G-{\UBF} operates on an arbitrary POMP model. 
+G-{\UBF} therefore provides a potential approach to extending methodologies from SpatPOMP models to models that have some similarity to a SpatPOMP without formally meeting the definition.
+For example, there may be collections of interacting processes at different spatial scales in a spatiotemporal system. 
+Alternatively, the potential outcomes of the latent process may vary between spatial units, such as when modeling interactions between terrestrial and aquatic ecosystems.
+We do not further explore G-{\UBF} here.
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  asasasas #####################
+
+\section{\secTitleSpace Adapted simulation for an Euler approximation}
+
+\newcommand\nextn{n+1}
+\newcommand\thisn{n}
+
+We investigate the adapted simulation process by considering a continuous-time limit where it becomes a diffusion process.
+We find that adapted simulation can effectively track the latent process when the measurement error is on an appropriate scale.
+However, when the measurement error is large compared to the latent process noise, adapted simulation can fail in situations where filtering succeeds.
+We work with a one-dimensional POMP model having a latent process constructed as an Euler approximation,
+\begin{eqnarray}\label{x:euler}
+X_{\nextn}&=& X_{\thisn} + \mu(X_{\thisn})\delta + \sigma \sqrt{\delta} \epsilon_{\nextn}, 
+\end{eqnarray}
+which provides a numerical solution to a one-dimensional stochastic differential equation,
+\begin{eqnarray}
+\nonumber
+dX(t)&=& \mu\big(X(t)\big)\, dt + \sigma\, dU(t) ,
+\end{eqnarray}
+where $\{U(t)\}$ is a standard Brownian motion. 
+We will consider several different measurement processes.
+
+%\vspace{3mm}
+
+%\noindent{\bf \large M1. 
+\subsection{Measurement error on the same scale as the process noise}
+\label{subsec:m1}
+
+%\vspace{2mm}
+
+\noindent Here, we consider the measurement model
+\begin{equation} \label{m1}
+Y_{\nextn}= \mu(X_{\thisn})\delta + \sigma \sqrt{\delta} \epsilon_{\nextn} + \tau\sqrt{\delta}\,\eta_{\nextn}.
+\end{equation}
+This is an approximation to the increment $Y(t+\delta)-Y(t)$ of a continuous time measurement model
+\begin{equation}
+\label{m1:cts}
+dY(t) = dX(t) + \tau\, dV(t),
+\end{equation}
+where $\{V(t)\}$ is a standard Brownian motion independent of $\{U(t)\}$.
+The measurement model (\ref{m1:cts}) makes inference on $X(t)$ given $Y(t)$ a continuous time version of the filtering problem.
+A feature of this model is that $Y(t)$ does not directly track the level of the state, since the solution with initial conditions $Y(t_0)=X(t_0)$ and $V(t_0)=0$ is
+\begin{equation}
+\nonumber
+Y(t) = X(t) + \tau V(t).
+\end{equation}
+The measurement error, $\tau V(t)$, has variance $\tau^2 t$ that increases with $t$. 
+However, under appropriate conditions, information on changes in $\{X(t)\}$ obtained via $\{Y(t)\}$ are enough to track $X(t)$ indirectly via the filtering equations.
+For the POMP given by (\ref{x:euler}) and (\ref{m1}), we can calculate exactly the adapted simulation distribution $f_{X_{\nextn}|Y_{\nextn},X_{\thisn}}$.
+It is convenient to work conditionally on $X_{\thisn}$, allowing us to treat $X_{\thisn}$ and $\mu(X_{\thisn})$ as constants, with $X_{\nextn}$ and $Y_{\nextn}$ therefore being jointly normally distributed.
+A Gaussian distribution calculation then gives the conditional moments.
+First, we find
+\begin{eqnarray*}
+%\label{m1.1}
+\E\big[ X_{\nextn}|Y_{\nextn},X_{\thisn} \big]
+&=& 
+X_{\thisn} + \mu(X_{\thisn})\delta + \E\big[{\sigma \sqrt{\delta} \epsilon_{\nextn} \, \big| \, \sigma \sqrt{\delta}\epsilon_{\nextn}+\tau{\sqrt{\delta}}\eta_{\nextn}}\big]
+\\
+&=&
+X_{\thisn} + \mu(X_{\thisn})\delta + \frac{\sigma^2}{\sigma^2 +\tau^2}
+\big(
+  \sigma \sqrt{\delta}\epsilon_{\nextn}+\tau{\sqrt{\delta}}\eta_{\nextn}
+\big)
+%\label{m1.2}
+\\
+&=& X_{\thisn} + \mu(X_{\thisn})\delta + \frac{\sigma^2}{\sigma^2 +\tau^2} 
+  \big( Y_{\nextn}- \mu(X_{\thisn})\delta \big).
+\end{eqnarray*} 
+Then,
+\begin{eqnarray*}
+\var\big[{X_{\nextn} \, \big| \, Y_{\nextn},X_{\thisn}}\big]
+&=& 
+\var\big[
+   \sigma \sqrt{\delta} \epsilon_{\nextn} \, \big| \,
+   \sigma \sqrt{\delta}\epsilon_{\nextn}+\tau{\sqrt{\delta}}\eta_{\nextn}
+\big]
+\\
+&=& \sigma^2\delta - \frac{\sigma^4\delta^2}{\sigma^2\delta+\tau^2\delta}
+\\
+&=& \delta\frac{\sigma^2\tau^2}{\sigma^2+\tau^2}.
+\end{eqnarray*}
+Call the adapted simulation process $\{A_n\}$, defined conditionally on $\{Y_n\}$. 
+We see from the above calculation that 
+\begin{eqnarray*}
+%\label{m1:a}
+A_{\nextn} &=& A_{\thisn} + \mu(A_{\thisn})\delta +
+  \frac{\sigma^2}{\sigma^2 +\tau^2} 
+  \Big( 
+    \mu(X_{\thisn})\delta + \sigma \sqrt{\delta} \, \epsilon_{\nextn}
+    + \tau\sqrt{\delta} \, \eta_{\nextn}  -\mu(A_{\thisn})\, \delta
+  \Big) 
+\\
+&& 
+\hspace{4cm} + 
+  \frac{\sigma\tau}{\sqrt{\sigma^2+\tau^2}} \sqrt{\delta} \, \zeta_{\nextn}
+\end{eqnarray*}
+where $\{\zeta_n\}$ is an iid standard normal sequence independent of $\{\epsilon_n,\eta_n\}$.
+To study how well the adapted simulation tracks $\{X_n\}$, we subtract $X_{\nextn}$ from both sides to get
+\begin{eqnarray*}
+%\label{m1:b}
+\hspace{-8mm} [A_{\nextn}-X_{\nextn}] &=& [A_{\thisn} -X_{\thisn}] + [\mu(A_{\thisn}) - \mu(X_{\thisn})]\delta - \sigma \sqrt{\delta} \, \epsilon_{\nextn} 
+\\
+&& \hspace{1mm}
++ 
+  \frac{\sigma^2}{\sigma^2 +\tau^2} 
+  \Big( 
+     [\mu(X_{\thisn})-\mu(A_{\thisn})]\delta + \sigma \sqrt{\delta} \, \epsilon_{\nextn} + \tau\sqrt{\delta} \, \eta_{\nextn}  
+   \Big) 
+   + \frac{\sigma\tau}{\sqrt{\sigma^2+\tau^2}} \sqrt{\delta} \, \zeta_{\nextn}
+\\
+&=&   [A_{\thisn} -X_{\thisn}] +  \frac{2\sigma^2+\tau^2}{\sigma^2 +\tau^2}[\mu(X_{\thisn})-\mu(A_{\thisn})]\delta
+\\
+&& \hspace{3mm}
++   \frac{\sigma^2\tau\sqrt{\delta}\eta_{\nextn} - \sigma\tau^2\sqrt{\delta}\epsilon_{\nextn}}{\sigma^2 +\tau^2} 
+   + \frac{\sigma\tau}{\sqrt{\sigma^2+\tau^2}} \sqrt{\delta} \, \zeta_{\nextn}.
+\end{eqnarray*}
+$\{A_n\}$ tracks $\{X_n\}$ when the process $\{A_n-X_n\}$ is stable.
+This happens when $\mu(x)-\mu(y)$ is negative when $x$ is sufficiently larger than $y$. 
+For example, a stable autoregressive process with $\mu(x)=-ax$ gives a stable adapted filter process.
+
+
+\subsection{Independent measurement error on a scale that gives a finite limiting amount of information about $X(t)$ from measurements on a unit time interval}
+\label{subsec:m2}
+
+\noindent We now consider the measurement model
+\begin{eqnarray} 
+%\label{m2}
+\nonumber
+Y_{\nextn}&=& X_{\nextn}+ \frac{\tau}{\sqrt{\delta}}\, \eta_{\nextn}
+\\
+  &=& X_{\thisn} + \mu(X_{\thisn}) \, \delta + \sigma \sqrt{\delta}  \, \epsilon_{\nextn}+\frac{\tau}{\sqrt{\delta}}\eta_{\nextn},
+\label{e0}
+\end{eqnarray}
+where $\{\epsilon_n,\eta_n\}$ is a collection of independent standard normal random variables.
+The conditional mean is now
+\begin{eqnarray}
+%\label{m2:e1}
+\nonumber
+\E\big[{X_{\nextn}|Y_{\nextn},X_{\thisn}}\big].
+&=&
+X_{\thisn} + \mu(X_{\thisn})\delta +
+\E\Big[
+  \sigma \sqrt{\delta} \epsilon_{\nextn}\,\Big| \, \sigma \sqrt{\delta}\epsilon_{\nextn}+\frac{\tau}{\sqrt{\delta}} \eta_{\nextn}\Big]
+\\
+&=&
+X_{\thisn} + \mu(X_{\thisn})\delta + \frac{\sigma^2\delta}{\sigma^2\delta +\tau^2/\delta}
+\big(
+  \sigma \sqrt{\delta}\epsilon_{\nextn}+\tau{\sqrt{\delta}} \, \eta_{\nextn}
+\big)
+\label{m2.2}
+\end{eqnarray} 
+Using (\ref{e0}) and (\ref{m2.2}) gives
+\begin{eqnarray*}
+\E\big[{X_{\nextn}|Y_{\nextn},X_{\thisn}}\big] &=& 
+X_{\thisn} + \mu(X_{\thisn})\delta + \frac{\sigma^2\delta^2}{\sigma^2\delta^2+\tau^2} 
+\Big(
+  Y_{\nextn}- X_{\thisn} - \mu(X_{\thisn})\, \delta
+\Big).
+\end{eqnarray*} 
+In the limit as $\delta\to 0$, the contribution from the measurement is order $\delta^2$ and is therefore negligible.
+Although the observation process is meaningfully informative about the latent process, the adapted simulation fails to track the latent process in this limit. 
+Intuitively, this is because the adapted simulation is trying to track differences in the latent process, but for this model the signal to noise ratio for the difference in each interval of length $\delta$ tends to zero.
+
+\subsection{Independent measurements of the latent process with measurement error on a scale that gives a useful adapted process as $\delta\to 0$}
+\label{subsec:m3}
+
+\noindent We now consider the measurement model
+\begin{eqnarray} 
+%\label{m3}
+\nonumber
+Y_{\nextn}&=& X_{\nextn}+ \tau\eta_{\nextn}
+\\
+  &=& X_{\thisn} + \mu(X_{\thisn})\delta + \sigma \sqrt{\delta} \epsilon_{\nextn}+\tau\eta_{\nextn}.
+\label{m3:e0}
+\end{eqnarray}
+The conditional mean is now
+\begin{eqnarray}
+%\label{m3:e1}
+\nonumber
+\E\big[{X_{\nextn}|Y_{\nextn},X_{\thisn}}\big].
+&=&
+X_{\thisn} + \mu(X_{\thisn})\, \delta +
+\E\big[
+  \sigma \sqrt{\delta} \epsilon_{\nextn}\,\big| \,
+  \sigma \sqrt{\delta}\epsilon_{\nextn}+\tau \eta_{\nextn}
+\big]
+\\
+&=&
+X_{\thisn} + \mu(X_{\thisn})\delta + \frac{\sigma^2\delta}{\sigma^2\delta +\tau^2}
+\big(
+  \sigma \sqrt{\delta}\epsilon_{\nextn}+\tau \eta_{\nextn}
+\big)
+\label{m3.2}
+\end{eqnarray} 
+Using (\ref{m3:e0}) and (\ref{m3.2}) gives
+\begin{eqnarray*}
+\E\big[ X_{\nextn}|Y_{\nextn},X_{\thisn}\big] &=& 
+X_{\thisn} + \mu(X_{\thisn})\delta + \frac{\sigma^2\delta}{\sigma^2\delta+\tau^2} 
+\Big(
+  Y_{\nextn}- X_{\thisn} - \mu(X_{\thisn})\delta
+  \Big)
+\\
+&=& X_n + \mu(X_n)\delta + \frac{\sigma^2}{\tau^2} \delta
+\Big(
+  Y_{\nextn}- X_{\thisn} - \mu(X_{\thisn}) \, \delta
+  \Big)
++ o(\delta)
+\end{eqnarray*} 
+In the limit as $\delta\to 0$, the adapted simulation has a diffusive drift toward the value of the latent process.
+
+
+For disease models, incidence data can arguably be considered as noisy measurements of the change of a state variable (number of susceptibles) that is not directly measured. 
+This could correspond to a situation where the measurement error is on the same scale as the process noise (Subsection~\ref{subsec:m1}). 
+Alternatively, we could think of weekly aggregated incidence as a noisy measurement of the infected class, in which case the measurement error could match the scaling in Subsection~\ref{subsec:m3}.
+
+The model in Subsection~\ref{subsec:m2} is a cautionary tale, warning us against carrying out adapted simulation on short time intervals.
+An interpretation is that one should not carry out adapted simulation unless a reasonable amount of information has accrued.
+When each observation has low information, a particle filter may enable solution to the filtering problem without particle depletion.
+It is when the data are highly informative that the curse of dimensionality makes basic particle filters ineffective, opening up demand for alternative methods.
+
+We are now in a better position to understand why it may be appropriate to keep many particle representations at intermediate timesteps while resampling down to a single representative at each observation time, as {\ABF} and {\ABFIR} do.
+We have seen that adaptive simulation can fail when observations occur frequently.
+Resampling down to a single particle too often can lose the ability for the adapted process to track the latent process.
+This implies that adapted simulation should not be relied upon more than necessary to ameliorate the curse of dimensionality: once proper importance sampling for filtering problem becomes tractable in a sufficiently small spatiotemporal neighborhood, one should maintain weighted particles on this spatiotemporal scale rather than resorting to adapted simulation.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 1111111111111111
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 2222222222222222
+
+
+\section{\secTitleSpace {\UBF} convergence: Proof of Theorem~1}
+
+We consider a collection of models $f_{\myvec{X}_{0:\Time},\myvec{Y}_{1:\Time}}$ and data $\data{\myvec{y}}_{1:\Time}$ defined for each $(\Unit,\Time)$.
+These models and datasets are not required to have any nesting relationship, so we do not insist that $X_{1,1}$ or $\data{y}_{1,1}$ should be the same for $(\Unit,\Time)=(10,10)$ as for $(\Unit,\Time)=(100,100)$.
+Formally, we define probability and expectation on a product space of the stochastic model and Monte Carlo outcomes. 
+Monte Carlo quantities such as the output of the {\UBF}, {\ABF} and {\ABFIR} algorithms depend on the data but not on any random variables constructed under the model.
+As a consequence, we can use $\E$ to correspond both to expectations over Monte Carlo stochasticity (for Monte Carlo quantities) and model stochasticity (for random variables constructed under the model).
+We suppress discussion of measurability by assuming that all functions considered have appropriate measurability properties.
+We restate the assumptions and statement for Theorem~1.
+
+
+\Ai  %% Assumption 1  Assumption~\ref{A1}
+
+We use the total variation bound in Assumption~~\ref{A1} via the following Proposition~\ref{weak_coupling:lemma}, which replaces conditioning on $X_{B^c_{\unit,\time}}$ with conditioning on $Y_{B^c_{\unit,\time}}$. The bound in \myeqref{eq:implication:of:A1} could be used in place of Assumption~\ref{A1}.
+
+\begin{prop}\label{weak_coupling:lemma}
+Under the conditions of Assumption~\ref{A1}, \myeqref{eq:weak_coupling2} implies
+\begin{equation}\label{eq:implication:of:A1}
+\bigg| \int h(x_{\unit,\time}) f_{X_{\unit,\time}|Y_{A_{\unit,\time}}}(x_{\unit,\time}\given \data{y}_{A_{\unit,\time}}) \, dx_{\unit,\time}
+- \int h(x_{\unit,\time})f_{X_{\unit,\time}|Y_{B_{\unit,\time}}}(x_{\unit,\time}\given \data{y}_{B_{\unit,\time}})
+\, dx_{\unit,\time} \, 
+\bigg| < \eone
+\end{equation}
+\end{prop}
+\begin{proof} For notational compactness, we suppress the arguments $x_{\unit,\time}$, $x_{B^c_{\unit,\time}}$, $\data{y}_{A_{\unit,\time}}$, $\data{y}_{B_{\unit,\time}}$ matching the subscripts of conditional densities.
+Using the conditional independence of the measurements given the latent process, we calculate
+\begin{eqnarray}\nonumber
+&& \hspace{-15mm}\bigg| \int h(x_{\unit,\time}) f_{X_{\unit,\time}|Y_{A_{\unit,\time}}} \, dx_{\unit,\time}
+- \int h(x_{\unit,\time})f_{X_{\unit,\time}|Y_{B_{\unit,\time}}} \, dx_{\unit,\time}
+\bigg|
+\\
+\nonumber
+&=& \bigg| \int  \bigg\{
+{\mediumint}  h(x_{\unit,\time}) f_{X^{}_{\unit,\time}|Y^{}_{B_{\unit,\time}},X_{B^c_{\unit,\time}
+}} \, dx_{\unit,\time} -  {\mediumint}
+ h(x_{\unit,\time})f_{X^{}_{\unit,\time}|Y^{}_{B_{\unit,\time}}}\, dx_{\unit,\time} \bigg\} \, 
+ f_{X_{B^c_{\unit,\time}} \given Y_{A^{}_{\unit,\time}}}\, dx^{}_{B^c_{\unit,\time}} \bigg| 
+%\label{eq:weak_coupling:lemma}
+\nonumber
+\\
+\nonumber
+&\le& \int  \bigg| \,
+{\mediumint}  h(x_{\unit,\time}) f_{X_{\unit,\time}|Y_{B_{\unit,\time}},X_{B^c_{\unit,\time}
+}} \, dx_{\unit,\time} -  {\mediumint}
+ h(x_{\unit,\time})f_{X_{\unit,\time}|Y_{B_{\unit,\time}}}\, dx_{\unit,\time} \, \bigg| \, 
+ f_{X_{B^c_{\unit,\time}} \given Y_{A^{}_{\unit,\time}}}\, dx^{}_{B^c_{\unit,\time}} 
+\\
+\nonumber
+& < & \int \eone \, f_{X_{B^c_{\unit,\time}} \given Y^{}_{A_{\unit,\time}}}\, dx^{}_{B^c_{\unit,\time}} \hspace{3mm} = \hspace{3mm} \eone.
+\end{eqnarray}
+\end{proof}
+
+\Aii  %% Assumption 2  Assumption~\ref{A1b}
+
+\Aiii   %% Assumption 3   Assumption~\ref{A2}
+
+\Aiv    %% Assumption 4 \ref{A:unconditional:mix}
+
+%Note that requiring the inequality \myeqref{eq:A:unconditional:mix} to hold over $\altB^{}_{\unit,\time}$ implies that it holds over all subsets of  ${\altB^{}_{\unit,\time}}$. 
+%This is demonstrated by the following proposition.
+
+%\begin{prop}
+%Let $X$, $Y$ and $Z$ be random variables with joint density $f_{XYZ}(x,y,z)$.
+%If $\big|f_{XY|Z}-f_{XY}\big| < \epsilon \, f_{XY}$ then $\big| f_{X|Z}-f_{X} \big| < \epsilon \, f_{X}$.
+%\end{prop}
+\newcommand\extraSpace{\hspace{1mm}}
+%\begin{proof}
+%$\big|f_{X|Z}-f_{X}\big| 
+%\extraSpace = \extraSpace \left| \int \big( f_{XY|Z}-f_{XY} \big) \, dy \right|
+%\extraSpace \le \extraSpace \int  \big| f_{XY|Z}-f_{XY} \big| \, dy
+%\extraSpace < \extraSpace \epsilon \int f_{XY}\, dy  
+%\extraSpace = \extraSpace \epsilon \, f_X$.
+%\end{proof}
+
+Assumption~\ref{A:unconditional:mix} is needed only to ensure that the variance bound in Theorem~\ref{thm:tif} is essentially $O(\Unit \Time)$ rather than $O(\Unit^2 \Time^2)$. 
+Both these rates avoid the exponentially increasing variance characterizing the curse of dimensionality.
+Lower variance than $O(\Unit \Time)$ cannot be anticipated for any sequential Monte Carlo method since the log likelihood estimate can be written as a sum of $\Unit\Time$ terms each of which involves its own sequential Monte Carlo calculation.
+
+\TheoremI %% Theorem~\ref{thm:tif}
+
+\begin{proof}
+Suppose the quantities $w^M_{\unit,\time,\rep}$ and $w^P_{\unit,\time,\rep}$ constructed in Algorithm~{\UBF} are considered i.i.d.\ replicates of jointly defined random variables $w^M_{\unit,\time}$ and $w^P_{\unit,\time}$, for each $(\unit,\time)\in \spaceTime$.
+Also, write 
+\begin{equation}
+\nonumber
+\centersum^{MP}_{\unit,\time}= \frac{1}{\sqrt{\Rep}}\sum_{\rep=1}^\Rep\big(w^M_{\unit,\time,\rep}w^P_{\unit,\time,\rep} - \EMC[w^M_{\unit,\time}w^P_{\unit,\time}]\big),
+\hspace{2cm}
+\centersum^{P}_{\unit,\time}= \frac{1}{\sqrt{\Rep}}\sum_{\rep=1}^\Rep\big(w^P_{\unit,\time,\rep} - \EMC[w^P_{\unit,\time}]\big),
+\end{equation}
+Then, using the delta method (e.g., Section 2.5.3 in \cite{liu01}) we find
+\begin{eqnarray}
+\nonumber
+\MC{\loglik}_{\unit,\time} &=& \log\left( \frac{\sum_{\rep=1}^\Rep w^M_{\unit,\time,\rep}w^P_{\unit,\time,\rep}}{\sum_{\rep=1}^\Rep w^P_{\unit,\time,\rep}}\right)
+\\
+\nonumber
+&=&  \log\Big(\EMC[w^M_{\unit,\time}w^P_{\unit,\time}] + \Rep^{-1/2}\centersum^{MP}_{\unit,\time}\Big) - \log\Big({\EMC[w^P_{\unit,\time}] + \Rep^{-1/2} \centersum^P_{\unit,\time}}\Big)
+\\
+\label{eq:likelihood:at:point}
+&=& \log\left(\frac{\EMC[w^M_{\unit,\time}w^P_{\unit,\time}]}{\EMC[w^P_{\unit,\time}]}\right) +  \Rep^{-1/2}
+\left(\frac{\centersum^{MP}_{\unit,\time}}{\EMC[w^M_{\unit,\time}w^P_{\unit,\time}]} - \frac{\centersum^{P}_{\unit,\time}}{\EMC[w^P_{\unit,\time}]} \right) + o_P\big(\Rep^{-1/2}\big)
+\end{eqnarray}
+The joint distribution of $\big\{ (\centersum^{MP}_{\unit,\time},\centersum^{P}_{\unit,\time}), (\unit,\time)\in \spaceTime \big\}$ follows a standard central limit theorem as $\Rep\to\infty$.
+Each term has mean zero, with covariances uniformly bounded over $(\unit,\time,\altUnit,\altTime)$ due to Assumption~\ref{A2}.
+Specifically,
+\begin{equation}
+\nonumber
+\hspace{-3mm}
+\var
+\hspace{-1mm}
+\left(
+\hspace{-2mm}
+\begin{array}{c}
+\centersum^{MP}_{\unit,\time} \\
+\centersum^{P}_{\unit,\time} \\
+\centersum^{MP}_{\altUnit,\altTime} \\
+\centersum^{P}_{\altUnit,\altTime} \\
+\end{array} 
+\hspace{-2mm}
+\right)
+\hspace{-1mm}
+{=}
+\hspace{-1mm}
+\left(
+\hspace{-2mm}
+\begin{array}{cccc}
+\var(w^{M}_{\unit,\time}w^{P}_{\unit,\time}) 
+& \cov(w^{M}_{\unit,\time}w^{P}_{\unit,\time},w^{P}_{\unit,\time}) 
+\hspace{-2mm}
+& \cov(w^{M}_{\unit,\time}w^{P}_{\unit,\time},w^{M}_{\altUnit,\altTime}w^{P}_{\altUnit,\altTime}) 
+\hspace{-2mm}
+& \cov(w^{M}_{\unit,\time}w^{P}_{\unit,\time},w^{P}_{\altUnit,\altTime}) 
+\\
+\cov(w^{M}_{\unit,\time}w^{P}_{\unit,\time},w^{P}_{\unit,\time}) 
+& \var(w^{P}_{\unit,\time}) 
+& \cov(w^{P}_{\unit,\time},w^{M}_{\altUnit,\altTime}w^{P}_{\altUnit,\altTime}) 
+& \cov(w^{P}_{\unit,\time},w^{P}_{\altUnit,\altTime}) 
+\\
+\cov(w^{M}_{\unit,\time}w^{P}_{\unit,\time},w^{M}_{\altUnit,\altTime}w^{P}_{\altUnit,\altTime}) 
+\hspace{-2mm}
+& \cov(w^{P}_{\unit,\time},w^{M}_{\altUnit,\altTime}w^{P}_{\altUnit,\altTime}) 
+& \var(w^{M}_{\altUnit,\altTime}w^{P}_{\altUnit,\altTime}) 
+& \cov(w^{M}_{\altUnit,\altTime}w^{P}_{\altUnit,\altTime},w^{P}_{\altUnit,\altTime}) 
+\\
+\cov(w^{M}_{\unit,\time}w^{P}_{\unit,\time},w^{P}_{\altUnit,\altTime}) 
+& \cov(w^{P}_{\unit,\time},w^{P}_{\altUnit,\altTime}) 
+& \cov(w^{M}_{\altUnit,\altTime}w^{P}_{\altUnit,\altTime},w^{P}_{\altUnit,\altTime}) 
+& \var(w^{P}_{\altUnit,\altTime})
+\end{array}
+\hspace{-2mm}
+\right)
+\end{equation}
+Note that
+\begin{eqnarray*}
+\nonumber
+\log\left[ 
+  \frac{\EMC[w^{M}_{\unit,\time}w^{P}_{\unit,\time}]}{\EMC[w^{P}_{\unit,\time}]} 
+\right]
+&=&\log \left[
+\frac{
+\int f_{Y_{\unit,\time}|X_{\unit,\time}}(\data{y}_{\unit,\time}\given x_{\unit,\time,\rep})\, f_{Y_{B_{\unit,\time}}|X_{B_{\unit,\time}}}(\data{y}_{B_{\unit,\time}}\given x_{B_{\unit,\time}})\,
+f_{X_{B^+_{\unit,\time}}}(x_{B^+_{\unit,\time}}) \, dx_{B^+_{\unit,\time}}
+}{
+\int f_{Y_{B_{\unit,\time}}|X_{B_{\unit,\time}}}(\data{y}_{B_{\unit,\time}}\given x_{B_{\unit,\time}})\,
+f_{X_{B_{\unit,\time}}}(x_{B_{\unit,\time}}) \, dx_{B_{\unit,\time}}
+}
+\right]
+\\
+\nonumber
+&=& \log \big[ 
+  f_{Y_{\unit,\time}|Y_{B_{\unit,\time}}}(\data{y}_{\unit,\time}\given \data{y}_{B_{\unit,\time}})
+\big],
+\end{eqnarray*}
+where $B^+_{\unit,\time}=B_{\unit,\time}\cup (\unit,\time)$. Now, define
+\begin{equation}
+\nonumber
+\centersum^{\loglik}_{\unit,\time}=
+\left(\frac{\centersum^{MP}_{\unit,\time}}{\EMC[w^M_{\unit,\time}w^P_{\unit,\time}]} - \frac{\centersum^{P}_{\unit,\time}}{\EMC[w^P_{\unit,\time}]} \right)
+\end{equation}
+Summing over all $({\unit,\time})\in \spaceTime$, we get
+\begin{equation}
+\label{thm1:loglik:linearization}
+\sqrt{\Rep}\left( \MC{\loglik} - \sum_{({\unit,\time})\in\, \spaceTime}
+\log f_{Y_{\unit,\time}|Y_{B_{\unit,\time}}}(\data{y}_{\unit,\time}\given \data{y}_{B_{\unit,\time}})
+\right)
+= \sum_{({\unit,\time})\in \,  \spaceTime} \centersum^{\loglik}_{\unit,\time} + o(1).
+\end{equation}
+Now,
+\begin{equation}
+\nonumber
+\cov\big(\centersum^{\loglik}_{\unit,\time},\centersum^{\loglik}_{\altUnit,\altTime}\big)
+=\cov\left(
+  \frac{w^M_{\unit,\time}w^P_{\unit,\time}}{\EMC[w^M_{\unit,\time}w^P_{\unit,\time}]}
+  - \frac{w^P_{\unit,\time}}{\EMC[w^P_{\unit,\time}]},
+  \frac{w^M_{\altUnit,\altTime}w^P_{\altUnit,\altTime}}{\EMC[w^M_{\altUnit,\altTime}w^P_{\altUnit,\altTime}]}
+  - \frac{w^P_{\altUnit,\altTime}}{\EMC[w^P_{\altUnit,\altTime}]}
+\right).
+\end{equation}
+Since 
+\begin{equation}
+\nonumber
+\left|  \frac{w^M_{\unit,\time}w^P_{\unit,\time}}{\EMC[w^M_{\unit,\time}w^P_{\unit,\time}]}
+  - \frac{w^P_{\unit,\time}}{\EMC[w^P_{\unit,\time}]} \right| <Q^{2\Bsize},
+\end{equation}
+we have 
+\begin{equation}
+\nonumber
+\big| \cov\big(\centersum^{\loglik}_{\unit,\time},\centersum^{\loglik}_{\altUnit,\altTime}\big)
+\big| < Q^{4\Bsize},
+\end{equation}
+implying that
+\begin{equation}
+\label{var:bound:without:assumption}
+\var\left(\sum_{({\unit,\time})\in \spaceTime} \centersum^{\loglik}_{\unit,\time}\right)
+< Q^{4\Bsize}\Unit^2\Time^2.
+\end{equation}
+If, in addition, $(\unit,\time)$ and $(\altUnit,\altTime)\in A_{\unit,\time}$ are sufficiently separated in the sense of Assumption~\ref{A:unconditional:mix}, then Lemma~\ref{lemma:covariance-bound} shows that Assumption~\ref{A:unconditional:mix} implies
+\begin{equation}
+\nonumber
+\big| \cov\big(\centersum^{\loglik}_{\unit,\time},\centersum^{\loglik}_{\altUnit,\altTime}\big)
+\big| < \etwo Q^{4\Bsize}.
+\end{equation}
+The number of insufficiently separated neighbors to $(\unit,\time)$ is bounded by $\altb$, and so we obtain
+\begin{equation}
+\label{var:bound:with:assumption}
+\var\left(\sum_{({\unit,\time})\in S} \centersum^{\loglik}_{\unit,\time}\right)
+< \ThmOneVarBound.
+%Q^{4\Bsize}\big[ \Unit\Time \big( \altb + \etwo\Unit\Time \big) \big].
+\end{equation}
+Now we proceed to bound the bias in the Monte Carlo central limit estimator of $\loglik$.
+Putting $h(x_{\unit,\time})=f_{Y_{\unit,\time}|X_{\unit,\time}}(\data{y}_{\unit,\time}\given x_{\unit,\time})$ into Assumption~\ref{A1}, using Assumption~\ref{A2}, gives
+\begin{equation}
+\nonumber
+\big|
+f_{Y_{\unit,\time}|Y_{B_{\unit,\time}}}(\data{y}_{\unit,\time}\given \data{y}_{B_{\unit,\time}})
+- f_{Y_{\unit,\time}|Y_{A_{\unit,\time}}}(\data{y}_{\unit,\time}\given \data{y}_{A_{\unit,\time}})
+\big|
+< \eone Q.
+\end{equation}
+Noting that 
+\begin{equation}
+\label{LogInequality}
+|a-b|<\delta, \hspace{3mm} a>Q^{-1} \mbox{ and } b>Q^{-1} \mbox{ implies }|\log(a)-\log(b)| < \delta Q, 
+\end{equation}
+we find
+\begin{equation}
+\label{eq:log:diff:identity}
+\big|
+\log f_{Y_{\unit,\time}|Y_{B_{\unit,\time}}}(\data{y}_{\unit,\time}\given \data{y}_{B_{\unit,\time}})
+- \log f_{Y_{\unit,\time}|Y_{A_{\unit,\time}}}(\data{y}_{\unit,\time}\given \data{y}_{A_{\unit,\time}})
+\big|
+< \eone Q^2.
+\end{equation}
+Summing over $(\unit,\time)$, we get
+\begin{equation}
+\label{thm1:bias:bound}
+\left| \loglik - 
+\sum_{({\unit,\time})\in S}
+\log f_{Y_{\unit,\time}|Y_{B_{\unit,\time}}}(\data{y}_{\unit,\time}\given \data{y}_{B_{\unit,\time}})
+\right| 
+< \eone Q^2 \Unit\Time.
+\end{equation}
+Together, the results in [\ref{thm1:loglik:linearization}], [\ref{var:bound:without:assumption}], [\ref{var:bound:with:assumption}] and [\ref{thm1:bias:bound}] confirm the assertions of the theorem.
+\end{proof}
+
+
+%%%%%%%%%%%%%%%%% lemma2 ##########################
+
+%\newcommand\Xlemma{\Phi}
+%\newcommand\Ylemma{\Psi}
+%\newcommand\xlemma{\phi}
+%\newcommand\ylemma{\psi}
+\newcommand\Xlemma{U}
+\newcommand\Ylemma{V}
+\newcommand\xlemma{u}
+\newcommand\ylemma{v}
+
+\begin{lemma}\label{lemma:covariance-bound}
+Suppose $\Xlemma$ and $\Ylemma$ are random variables with joint density satisfying 
+\begin{equation}
+\big| f_{\Ylemma|\Xlemma}(\ylemma\given \xlemma)-f_{\Ylemma}(\ylemma) \big| < \epsilon f_{\Ylemma}(\ylemma).
+\end{equation}
+Suppose $|g(\Xlemma)| < a$ and $|h(\Ylemma)| < b$ for some real-valued function $g$ and $h$.
+Then, $\cov\big(g(\Xlemma),h(\Ylemma)\big) <  ab\epsilon$.
+\end{lemma}
+
+\begin{proof}
+The result is obtained by direct calculation, as follows.
+\begin{eqnarray}
+\nonumber
+\cov\big(g(\Xlemma),h(\Ylemma)\big) &=& \E\bigg[ g(\Xlemma) \, \E\Big[ h(\Ylemma)-\E[h(\Ylemma)] \, \Big| \,  \Xlemma\Big] \bigg]
+\\
+\nonumber
+&=& \int \left\{ \int g(\xlemma) h(\ylemma) \big( f_{\Ylemma|\Xlemma}(\ylemma \given \xlemma)-f_{\Ylemma}(\ylemma)\big)\, d{\ylemma} \right\} f_{\Xlemma}(\xlemma)\, d{\xlemma}
+\\
+\nonumber
+&<& \int \left\{ \int a b \epsilon f_{\Ylemma}(\ylemma) \, d{\ylemma} \right\} f_{\Xlemma}(\xlemma)\, d{\xlemma}
+\\
+\nonumber
+&=& ab\epsilon.
+\end{eqnarray}
+\end{proof}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 22222222222222222
+
+\section{\secTitleSpace {\ABF} and {\ABFIR} convergence: Proof of Theorem~2}
+
+Let 
+$g^{}_{\myvec{X}_{0:\Time},\myvec{X}^P_{1:\Time}}(\myvec{x}_{0:\Time},\myvec{x}^P_{1:\Time})$ 
+be the joint density of the adapted process and the proposal process, 
+\begin{equation}
+\label{eq:g}
+g^{}_{\myvec{X}_{0:\Time},\myvec{X}^P_{1:\Time}}(\myvec{x}_{0:\Time},\myvec{x}^P_{1:\Time})
+= f_{\myvec{X}_0}(\myvec{x}_0)
+\prod_{\time=1}^{\Time} 
+f_{\myvec{X}_{\time}|\myvec{X}_{\time-1},\myvec{Y}_{\time}} 
+  \big( 
+    \myvec{x}_{\time} \given \myvec{x}_{\time-1},\data{\myvec{y}}_{\time} 
+  \big)
+\,\,
+f_{\myvec{X}_{\time}|\myvec{X}_{\time-1}}
+  \big(
+    \myvec{x}^P_{\time} \given \myvec{x}_{\time-1}
+  \big).
+\end{equation}
+For 
+$\unitTimeSubset \subset \UnitSet\times 1:\Time$, 
+define 
+$\unitTimeSubset^{[m]}=\unitTimeSubset \cap \big(\UnitSet\times \{m\}\big)$ 
+and set
+\begin{equation}
+\label{eq:h_S}
+\adapted^{}_{\unitTimeSubset}
+%(\myvec{x}_{0:\Time})
+= 
+\prod_{m=1}^{\Time} f_{Y_{\unitTimeSubset^{[m]}}|\myvec{X}^{}_{m-1}} \big( \data{y}_{\unitTimeSubset^{[m]}} \given \myvec{X}^{}_{m-1} \big),
+\end{equation}
+using the convention that an empty density $f_{Y_{\emptyset}}$ evaluates to 1.
+If we denoting $\E_{g}$ for expectation for $(\myvec{X}_{0:\Time},\myvec{X}^P_{1:\Time})$ having density $g_{\myvec{X}_{0:\Time},\myvec{X}^P_{1:\Time}}$, \eqref{eq:h_S} can be written as
+\begin{equation}
+\label{eq:h_S2}
+\nonumber
+\adapted^{}_{\unitTimeSubset}
+%(\myvec{x}_{0:\Time})
+= 
+\E_g\left[
+f_{Y_{\unitTimeSubset}|{X}^{}_{\unitTimeSubset}} 
+\big( 
+  \data{y}_{\unitTimeSubset} \given {X}^{P}_{\unitTimeSubset}
+\big)
+\, \Big| \, 
+\myvec{X}^{}_{0:\Time}
+%=\myvec{x}^{}_{0:\Time}
+\right],
+\end{equation}
+so we have
+\[
+\E_g \big[ \gamma_{B} \big] = \E_g \left[ f_{Y_{B}|X_{B}} \big(\data y_{B}| X_{B}^P \big) \right].
+\]
+Two useful identities are
+\begin{eqnarray}
+\nonumber
+%% \label{eq:AB:ratio}
+f_{X^{}_{\unit,\time}|Y_{A_{\unit,\time}}} 
+\big( 
+  x^{}_{\unit,\time}|\data{y}_{A_{\unit,\time}} 
+\big) 
+&=&
+\frac{
+  \E_{g}\Big[
+    f_{Y^{}_{A_{\unit,\time}}|X^{}_{A_{\unit,\time}}} \big( \data y_{A_{\unit,\time}} \given X^P_{A^{}_{\unit,\time}} \big) \, 
+    f^{}_{X_{\unit,\time}|X^{[\time]}_{A_{\unit,\time}},\myvec{X}_{\time-1}}\big( x^{}_{\unit,\time}|X^P_{A^{[\time]}_{\unit,\time}},\myvec{X}_{\time-1} \big)
+  \Big]
+}{
+  \E_{g}\Big[
+    f^{}_{Y_{A_{\unit,\time}}|X_{A_{\unit,\time}}}\big( \data{y}_{A_{\unit,\time}}|X^P_{A_{\unit,\time}} \big)
+  \Big]
+},
+\\
+\nonumber
+%% \label{eq:AB:ratio2}
+f_{Y^{}_{\unit,\time}|Y_{A_{\unit,\time}}} \big( \data{y}_{\unit,\time}|\data{y}_{A_{\unit,\time}} \big) &=&
+\frac{\E_{g}\big[\adapted^{}_{A^+_{\unit,\time}} 
+%\big( \myvec{X}_{0:\Time} \big) 
+\big]
+}{\E_{g}\big[\adapted^{}_{A_{\unit,\time}} 
+%\big( \myvec{X}_{0:\Time} \big) 
+\big]}.
+\end{eqnarray}
+%Thus, $\adapted_{\unitTimeSubset}$ is the proper weight for $f$ with respect to $g$ on $\unitTimeSubset$.
+
+
+\Bi %% Assumption~\ref{B1}
+
+
+\Bii %% Assumption~\ref{B1b}
+
+
+\Biii %% Assumption~\ref{B2}
+
+\begin{prop}\label{prop:ABF_AB}
+Setting $h(x)= f_{Y_{\unit,\time}|X_{\unit,\time}}(\data{y}_{\unit,\time}|x)$, assumptions~\ref{B1} and~\ref{B2} imply
+\begin{equation}
+\Bigg| \,
+\frac{\E_{g}\big[\adapted^{}_{A^+_{\unit,\time}}\big]}{\E_{g}\big[\adapted^{}_{A_{\unit,\time}}]}
+- 
+\frac{\E_{g}\big[\adapted^{}_{B^+_{\unit,\time}}\big]}{\E_{g}\big[\adapted^{}_{B_{\unit,\time}}]}
+\,
+\Bigg|
+< Q \epsilon.
+\end{equation}
+\end{prop}
+\begin{proof}
+Using the non-negativity of all terms to justify interchange of integral and expectation,
+\begin{equation}
+\begin{split}
+ & \int h(x) \E_g \Big[ f_{Y_{B_{u,n}}|X_{B_{u,n}}}(\data y_{B_{u,n}} | X_{B_{u,n}}^P) f_{X_{u,n}|X_{B_{u,n}^{[n]}},\myvec X_{n-1}}(x | X_{B_{u,n}^{[n]}}^P, \myvec X_{n-1}) \Big] dx \\
+ & = \E_g \Big[ \int f_{Y_{u,n}|X_{u,n}}(\data y_{u,n}|x) f_{X_{u,n}|X_{B_{u,n}^{[n]}},\myvec X_{n-1}}(x | X_{B_{u,n}^{[n]}}^P, \myvec X_{n-1}) dx \cdot f_{Y_{B_{u,n}}|X_{B_{u,n}}}(\data y_{B_{u,n}}|X_{B_{u,n}}^P) \Big]
+\end{split}
+\label{eq:int_h_fubini}
+\end{equation}
+But by the construction of $g$,
+\[
+\begin{split}
+f_{X_{u,n}|X_{B_{u,n}^{[n]}}, \myvec X_{n-1}} (x| X_{B_{u,n}^{[n]}}^P, \myvec X_{n-1})
+&= g_{X_{u,n}^P|X_{B_{u,n}^{[n]}}^P, \myvec X_{n-1}}(x | X_{B_{u,n}^{[n]}}^P, \myvec X_{n-1}) \\
+&= g_{X_{u,n}^P|X_{B_{u,n}}^P, \myvec X_{n-1}} (x|X_{B_{u,n}}^P, \myvec X_{n-1}).
+\end{split}
+\]
+Thus \eqref{eq:int_h_fubini} becomes
+\[
+\begin{split}
+  &\E_g \Big[ \int f_{Y_{u,n}|X_{u,n}}(\data y_{u,n}|x) g_{X_{u,n}^P|X_{B_{u,n}^P}, \myvec X_{n-1}} (x|X_{B_{u,n}}^P, \myvec X_{n-1}) dx \cdot f_{Y_{B_{u,n}}|X_{B_{u,n}}}(\data y_{B_{u,n}}|X_{B_{u,n}}^P) \Big]\\
+  &= \E_g \left[ \E_g \Big[ f_{Y_{u,n}|X_{u,n}}(\data y_{u,n} | X_{u,n}^P) | X_{B_{u,n}}^P, \myvec X_{n-1} \Big] \cdot f_{Y_{B_{u,n}}|X_{B_{u,n}}}(\data y_{B_{u,n}} | X_{B_{u,n}}^P) \right]\\
+  &= \E_g \Big[ f_{Y_{B_{u,n}^+} | X_{B_{u,n}^+}} (\data y_{B_{u,n}^+} | X_{B_{u,n}^+}^P) \Big]\\
+  &= \E_g \gamma_{B_{u,n}^+}.
+\end{split}
+\]
+Applying the same argument for the special case of $B_{u,n}=A_{u,n}$, we substitute into Assumption~\ref{B1} to complete the proof with the fact that $h<Q$.
+\end{proof}
+
+\BivA %% Assumption~\ref{B:unconditional:mix}
+
+
+The mixing of the adapted process in Assumption~\ref{B:unconditional:mix} replaces the mixing of the unconditional process in  Assumption~\ref{A:unconditional:mix}.
+Though mixing of the adapted process may be hard to check, one may suspect that the adapted process typically mixes more rapidly than the unconditional process.
+%As for the TIF analysis, we note that requiring the inequality in Assumption~\ref{B:unconditional:mix} to hold over ${B^{+2c}_{\unit,\time}}$ implies that it holds over all subsets of  ${B^{+2c}_{\unit,\time}}$. 
+Assumption~\ref{B:unconditional:mix} is needed only to ensure that the variance bound in Theorem~\ref{thm:abf} is essentially $O(\Unit \Time)$ rather than $O(\Unit^2 \Time^2)$. 
+Either of these rates avoids the exponentially increasing variance characterizing the curse of dimensionality.
+Lower variance than $O(\Unit \Time)$ cannot be anticipated for any sequential Monte Carlo method since the log likelihood estimate can be written as a sum of $\Unit\Time$ terms each of which involves its own sequential Monte Carlo calculation.
+The following Proposition~\ref{prop:cov:mix} gives an implication of Assumption~\ref{B:unconditional:mix}
+
+%%%% pppppppppp
+
+\begin{prop} \label{prop:cov:mix}
+  Assumption~\ref{B:unconditional:mix} implies that, if $(\altUnit, \altTime) \notin \altB_{\unit\comma\time}$,
+\begin{equation}
+\label{supp:eq:cov:g:bound}
+\cov_{g_{}}\big(\adapted^{}_{B^{}_{\unit,\time}},\adapted^{}_{B^{}_{\altUnit\comma\altTime}} \big) < \efourA Q^{|B^{}_{\unit,\time}|+|B^{}_{\altUnit\comma\altTime}|}.
+\end{equation}
+\end{prop}
+\begin{proof}
+Write 
+$\gamma=\adapted^{}_{B^{}_{\unit,\time}}
+%(\myvec{X}_{0:\time})
+$ and 
+$\tilde\gamma=\adapted^{}_{B^{}_{\altUnit\comma\altTime}}
+%(\myvec{X}_{0:\time})
+$. 
+Also, write $B=B^{}_{\unit,\time}$, $\tilde B=B^{}_{\altUnit,\altTime}$ and $f^{}_{B}(x^P_B)=f^{}_{Y_B|X_B}(\data{y}_B\given x_B^P)$.
+Then,
+\begin{eqnarray}
+\nonumber
+\hspace{-5mm} \E[\gamma\tilde\gamma]&=&
+\int
+  \left[
+    \int f^{}_{B}(x^P_B)
+         g^{}_{X^P_B|\myvec{X}_{0:\Time}}(x^P_B\given \myvec{x}_{0:\Time})\, dx^P_B
+  \right]
+\\
+\nonumber
+&& \hspace{15mm} 
+\times
+  \left[
+    \int f^{}_{{\tilde B}}(x^P_{\tilde B})
+         g^{}_{X^P_{\tilde B}|\myvec{X}_{0:\Time}}(x^P_{\tilde B}\given \myvec{x}_{0:\Time})\, dx^P_{\tilde B}
+  \right]
+  g^{}_{\myvec{X}_{0:\Time}}(\myvec{x}_{0:\Time})\, d\myvec{x}_{0:\Time}
+\\
+\nonumber
+&=& \int \int f^{}_{B}(x^P_B)\, f^{}_{{\tilde B}}(x^P_{\tilde B})\,  \bigg\{ \int g^{}_{X^P_B|\myvec{X}_{0:\Time}}(x^P_B\given \myvec{x}_{0:\Time}) 
+\\
+\label{eq:prop:long:integral}
+&& \hspace{15mm} 
+\times \, 
+g^{}_{X^P_{\tilde B}|\myvec{X}_{0:\Time}}(x^P_{\tilde B}\given \myvec{x}_{0:\Time}) \, g^{}_{\myvec{X}_{0:\Time}}(\myvec{x}_{0:\Time}) \, d\myvec{x}_{0:\Time} \bigg\}
+\, dx^P_B \, dx^P_{\tilde B} 
+\end{eqnarray}
+Putting the approximate conditional independence requirement of Assumption~\ref{B:unconditional:mix} into \myeqref{eq:prop:long:integral}, we have
+\begin{eqnarray}
+\nonumber
+&& \hspace{-15mm}
+\Big|  
+  \E[\gamma\tilde\gamma] -
+  \int f^{}_{B}(x^P_B)\, f^{}_{{\tilde B}}(x^P_{\tilde B}) \, 
+         g^{}_{X^P_{B}X^P_{\tilde B}|\myvec{X}_{0:\Time}}(x^{P}_{B},x^P_{\tilde B}\given \myvec{x}_{0:\Time})
+\, g^{}_{\myvec{X}_{0:\Time}}(\myvec{x}_{0:\Time})
+\, dx^P_B \, dx^P_{\tilde B} \, d\myvec{x}_{0:\Time}
+\Big| 
+\\
+\nonumber
+&& \hspace{40mm} < (1/2)\, \efourA \, Q^{|B|+|\tilde B|}.
+\end{eqnarray}
+This gives
+\begin{equation}
+\label{eq:prop:medium:integral}
+\Big|  
+  \E[\gamma\tilde\gamma] -
+  \int f^{}_{B}(x^P_B)\, f^{}_{{\tilde B}}(x^P_{\tilde B}) \, 
+         g^{}_{X^P_{B}X^P_{\tilde B}}(x^{P}_{B},x^P_{\tilde B})\, dx^P_B \, dx^P_{\tilde B} 
+\Big| < (1/2) \, \efourA \, Q^{|B|+|\tilde B|}.
+\end{equation}
+Then, using the approximate unconditional independence requirement of Assumption~\ref{B:unconditional:mix}  combined with the triangle inequality, \myeqref{eq:prop:medium:integral} implies
+\begin{equation}
+\label{eq:prop:short:integral}
+\Big| 
+  \E[\gamma\tilde\gamma] -
+  \int f^{}_{B}(x^P_B)\, f^{}_{{\tilde B}}(x^P_{\tilde B}) \, 
+         g^{}_{X^P_{B}}(x^{P}_{B}) \,  g^{}_{X^P_{\tilde B}}(x^P_{\tilde B})\, dx^P_B \, dx^P_{\tilde B} 
+\Big| < \efourA \, Q^{|B|+|\tilde B|}.
+\end{equation}
+We can rewrite \myeqref{eq:prop:short:integral} as
+\begin{equation}
+\label{eq:prop:without:integral}
+\big|  \, 
+  \E[\gamma\tilde\gamma] - \E[\gamma] \, \E[\tilde\gamma] 
+\, \big|
+< \efourA \, Q^{|B|+|\tilde B|},
+\end{equation}
+proving the proposition.
+\end{proof}
+
+\BivB %% Assumption~\ref{B:temporal:mix}
+
+Assumption~\ref{B:temporal:mix} is needed to ensure the stability of the Monte Carlo approximation to the adapted process. 
+It ensures that any error due to finite Monte Carlo sample size has limited consequences at sufficiently remote time points.
+One could instead propose a bound that decreases exponentially with $K$, but that is not needed for the current purposes.
+The following Proposition~\ref{lemma:E1E2} is useful for taking advantage of Assumption~\ref{B:temporal:mix}.
+  
+\begin{prop}\label{lemma:E1E2}
+  Suppose that $f$ is a non-negative function and that for some $\epsilon>0$,
+  \[|f(x) - f(x')| < \epsilon f(x')\]
+  holds for all $x,x'$.
+  Then for any two probability distributions where the expectations are denoted by $\E_1$ and $\E_2$ and for any random variable $X$, we have
+  \[
+  |\E_1 f(X) - \E_2 f(X) | \leq 
+%\frac{\epsilon}{1+\epsilon} 
+\epsilon \, \E_2 f(X).
+  \]
+%  and thus
+%  \[
+%  \frac{1}{1+\epsilon} \leq \frac{\E_1 f(X)}{\E_2 f(X)} \leq 1+\epsilon,
+%  \]
+%  provided that $\E_2 f(X) > 0$.
+\end{prop}
+\begin{proof}
+  Let the two probability laws be denoted by $P_1$ and $P_2$. We have
+  \[\begin{split}
+  |\E_1 f(X) - \E_2 f(X)| &= \left| \int f(x) P_1(dx) - \int f(x') P_2(dx') \right|\\
+  &\leq \left| \int \int f(x) P_1(dx) P_2(dx') - \int\int f(x') P_1(dx) P_2(dx') \right|\\
+  &\leq \int\int | f(x) - f(x') | P_1(dx) P_2(dx')\\
+  &\leq  \int 
+%\frac{\epsilon}{1+\epsilon} 
+\epsilon
+f(x') P_2(dx') = 
+%\frac{\epsilon}{1+\epsilon} 
+\epsilon \, 
+\E_2 f(X).
+  \end{split}.\]
+%  Thus,
+%  \[
+%  \frac{1}{1+\epsilon} = 1- \frac{\epsilon}{1+\epsilon} \leq \frac{\E_1 f(X)}{\E_2 f(X)} \leq 1 + \frac{\epsilon}{1+\epsilon} < 1+\epsilon.
+%  \]
+\end{proof}
+
+
+
+
+\Bv  %% Assumption~\ref{B:girf}
+
+Assumption~\ref{B:girf} controls the Monte Carlo error for a single time interval on a single bootstrap replicate. 
+In the case $\Ninter=1$, {\ABFIR} becomes {\ABF} and this assumption is one of many alternatives for bounding error from importance sampling.  
+The purpose behind the selection of Assumption~\ref{B:girf} is to draw on the results of \citet{park20} for intermediate resampling, and our assumption is a restatement of their Theorem~2.
+When $\Ninter=1$, the curse of dimensionality for importance sampling has the consequence that $C_0$ grows exponentially with $\Unit$.
+However, \citet{park20} showed that setting $\Ninter=\Unit$ can lead to situations where $C_0(\Unit,\Time,\Ninter)$ in Assumption~\ref{B:girf} grows polynomially with $\Unit$.
+Here, we do not place requirements concerning the dependence of $C_0$ on $\Unit$, $\Time$ and $\Ninter$ since our immediate concern is a limit where $\Rep$ and $\Np$ increase. 
+Nevertheless, the numerical results are consistent with the theoretical and empirical results obtained for intermediate resampling in the context of particle filtering by \cite{park20}.
+
+\Bvi    %% Assumption~\ref{B:XG_XA_ind}
+
+The Monte Carlo conditional independence required by Assumption~\ref{B:XG_XA_ind} would hold for {\ABFIR} if the guide variance $V_{\unit,\time,i}$ were calculated using an independent set of guide simulations to those used for evaluating the measurement weights $w^M_{\unit,\time,i,j}$.
+For numerical efficiency, the {\ABFIR} algorithm implemented here constructs a shared pool of simulations for both purposes rather than splitting the pool up between them, in the expectation that the resulting minor violation of Assumption~\ref{B:XG_XA_ind} has negligible impact.
+
+\TheoremII %% Theorem~\ref{thm:abf}
+
+%%%%%%%%%%%%%%%%%%%%%%%% p2p2p2p2
+
+\begin{proof}   
+First, we set up some notation. For $\unitTimeSubset_{\unit\comma\time}$ and $w^M_{\unit,\time,\rep,\np}$ constructed by {\ABFIR}, define
+\begin{equation}\label{eq:gamma:def}
+\adapted^{MC,\rep}_{\unitTimeSubset_{\unit\comma\time}}
+=
+  \prod_{m=1}^{\time}
+  \left[
+    \frac{1}{\Np}\sum_{\np=1}^{\Np}
+    \hspace{1mm}
+       \prod_{(\altUnit,m)\in \unitTimeSubset^{[m]}_{\unit\comma\time}} 
+    \hspace{-1mm}
+        w^M_{\altUnit,m,\rep,\np}
+  \right]
+\hspace{5mm}
+\mbox{and}
+\hspace{5mm}
+\bar\adapted^{MC}_{\unitTimeSubset_{\unit\comma\time}}
+=\frac{1}{\Rep} \sum_{\rep=1}^{\Rep} \adapted^{MC,\rep}_{\unitTimeSubset_{\unit\comma\time}}.
+\end{equation}
+The Monte Carlo conditional likelihoods output by {\ABFIR} can be written as
+\begin{equation}
+\MC{\loglik}_{\unit,\time} = \log\MC{\bar\adapted}_{B^+_{\unit,\time}} - \log\MC{\bar\adapted}_{B^{\plusStrut}_{\unit,\time}}.
+\end{equation}
+We proceed with a similar argument to the proof of Theorem~\ref{thm:tif}. 
+Since $\adapted^{MC,\rep}_{\unitTimeSubset_{\unit\comma\time}}$ are i.i.d. for $\rep \in \seq{1}{\Rep}$, we can suppose they are replicates of a Monte Carlo random variable $\adapted^{MC}_{\unitTimeSubset_{\unit\comma\time}}$.
+We define
+\begin{equation}
+\nonumber
+\centersum^{+}_{\unit,\time}= \frac{1}{\sqrt{\Rep}}\sum_{\rep=1}^\Rep\big(
+\adapted^{MC,\rep}_{B^+_{\unit,\time}} - \E\big[\adapted^{MC}_{B^+_{\unit,\time}}\big]\big),
+\hspace{2cm}
+\centersum^{}_{\unit,\time}= \frac{1}{\sqrt{\Rep}}\sum_{\rep=1}^\Rep\big(
+\adapted^{MC,\rep}_{B^{}_{\unit,\time}} - \E\big[\adapted^{MC}_{B^{}_{\unit,\time}}\big]\big).
+\end{equation}
+The same calculation as \myeqref{eq:likelihood:at:point} gives
+\begin{eqnarray}
+\label{eq:likelihood:at:point:B}
+\MC{\loglik}_{\unit,\time} 
+&=& 
+\log\left(\frac{\E\big[\adapted^{MC}_{B^+_{\unit,\time}}\big]}{\E\big[\adapted^{MC}_{B^{\plusStrut}_{\unit,\time}}\big]}\right) +  \Rep^{-1/2}
+\left(\frac{\centersum^{+}_{\unit,\time}}{\E\big[\adapted^{MC}_{B^+_{\unit,\time}}\big]} - \frac{\centersum^{}_{\unit,\time}}{\E\big[\adapted^{MC}_{B^{}_{\unit,\time}}\big]} \right) + o_P\big(\Rep^{-1/2}\big)
+\end{eqnarray}
+The joint distribution of $\big\{ (\centersum^{+}_{\unit,\time},\centersum^{}_{\unit,\time}), (\unit,\time)\in \spaceTime \big\}$ follows a standard central limit theorem as $\Rep\to\infty$.
+Each term has mean zero, with variances and covariances uniformly bounded over $(\unit,\time,\altUnit,\altTime)$ due to Assumption~\ref{B2}.
+From Proposition~\ref{prop:ABF_AB}, using the same reasoning as \myeqref{eq:log:diff:identity},
+\begin{equation}
+\label{thm2:eq3}
+\left|  
+  \log \left(
+    \frac{\E_{g}\big[\adapted^{}_{A^+_{\unit,\time}}
+\big]}{\E_{g}\big[\adapted^{}_{A^{}_{\unit,\time}}
+\big]} 
+  \right)
+  - 
+  \log \left(
+     \frac{\E_{g}\big[\adapted^{}_{B^+_{\unit,\time}}
+\big]}{\E_{g}\big[\adapted^{}_{B^{}_{\unit,\time}}
+\big]}
+  \right)
+\right|
+< \ethree Q^2.
+\end{equation}
+Now we use  Lemma~\ref{lemma:AS_bias} and \eqref{LogInequality} to obtain
+\begin{eqnarray}
+\nonumber
+&&\left|  
+  \log \left(
+     \frac{\E_{g}\big[\adapted^{}_{B^+_{\unit,\time}}
+\big]}{\E_{g}\big[\adapted^{}_{B^{}_{\unit,\time}}
+\big]}
+  \right)
+  -
+  \log \left(
+     \frac{\EMC\big[\adapted^{MC}_{B^+_{\unit,\time}}\big]}{\EMC\big[\adapted^{}_{B^{}_{\unit,\time}}\big]}
+  \right)
+\right|
+\\
+\nonumber
+&& \le
+  \left|  
+    \log \E_{g}\big[\adapted^{}_{B^+_{\unit,\time}}
+    \big]
+    -
+    \log \EMC\big[\adapted^{}_{B^{+}_{\unit,\time}}\big]
+  \right|
+  +
+  \left|
+    \log \E_{g}\big[\adapted^{}_{B^{}_{\unit,\time}}
+    \big]
+    -
+    \log \EMC\big[\adapted^{}_{B^{}_{\unit,\time}}\big]
+  \right|
+\\
+\label{thm2:eq3b}
+&& < 2 Q^{2\Bsize}\big(\boundLemmaUniform\big).
+\end{eqnarray}
+The proof of the central limit result in \myeqref{th:abf:lik:bound} is completed by combining \myeqref{eq:likelihood:at:point:B}, \myeqref{thm2:eq3} and \myeqref{thm2:eq3b}.
+To show \myeqref{th:abf:lik:bound2} we check that $\centersum^{}_{\unit,\time}$ and $\centersum^{}_{\altUnit,\altTime}$ are weakly correlated when $(\unit,\time)$ and $(\altUnit,\altTime)$ are sufficiently separated. 
+By the same reasoning as the proof of Theorem~\ref{thm:tif}, it is sufficient to show that $\adapted^{MC}_{B^{}_{\unit\comma\time}}$ and $\adapted^{MC}_{B^{}_{\altUnit\comma\altTime}}$ are weakly correlated.
+These Monte Carlo quantities approximate $\adapted^{}_{B^{}_{\unit,\time}}(\myvec{X}_{0:\time-1})$ and $\adapted^{}_{B^{}_{\altUnit\comma\altTime}}(\myvec{X}_{0:\altTime-1})$ with $\myvec{X}$ drawn from $g$.
+Let us suppose $\time\ge\altTime$, and write $d_{\unit,\time}=\time-\inf_{(v,m)\in B_{\unit,\time}}m$.
+First, we consider the situation $\time-\altTime>K+d_{\unit,\time}$, in which case we can use the Markov property to give
+\begin{equation}
+\label{supp:eq:cov:MC:bound}
+\cov\big(\adapted^{MC}_{B^{}_{\unit,\time}},\adapted^{MC}_{B^{}_{\altUnit\comma\altTime}}\big)
+< \EMC \big[ \adapted^{MC}_{B^{}_{\altUnit\comma\altTime}} \big]
+\sup_{\myvec{x}}\left\{
+\EMC \big[ \adapted^{MC}_{B^{}_{\unit\comma\time}} \big| \myvec{X}^A_{\time-d_{\unit,\time}-K,1}=\myvec{x} \big]
+- \EMC \big[ \adapted^{MC}_{B^{}_{\unit\comma\time}} \big] \right\}
+\end{equation}
+Then, the triangle inequality followed by applications of Assumption~\ref{B:temporal:mix} and Lemma~\ref{lemma:AS_bias} gives
+\newcommand\boundA{2\efourB + 2 \big( K+d_{\unit,\time}\big)\efive^{} }
+\begin{eqnarray}
+\nonumber
+&&\hspace{-15mm} \left|
+  \EMC \big[ \adapted^{MC}_{B^{}_{\unit\comma\time}} \big| \myvec{X}^A_{\time-d_{\unit,\time}-K,1}=\myvec{x} \big]
+  - \EMC \big[ \adapted^{MC}_{B^{}_{\unit\comma\time}} \big] 
+\right|
+\\
+\nonumber
+&& %\hspace{5mm}
+\le 
+  \Big|
+    \E_g\big[ \adapted^{}_{B^{}_{\unit\comma\time}}
+    \big| \myvec{X}_{\time-d_{\unit,\time}-K}=\myvec{x} \big]
+    - \E_g \big[ \adapted^{}_{B^{}_{\unit\comma\time}}
+    \big] 
+  \Big|
+\\
+\nonumber
+&& \hspace{15mm}
+  +
+  \Big|
+    \EMC \big[ \adapted^{MC}_{B^{}_{\unit\comma\time}} \big| \myvec{X}^A_{\time-d_{\unit,\time}-K,1}=\myvec{x} \big]
+    -    \E_g\big[ \adapted^{}_{B^{}_{\unit\comma\time}}
+    \big| \myvec{X}_{\time-d_{\unit,\time}-K}=\myvec{x} \big]
+  \Big|
+\\
+\nonumber
+&& \hspace{15mm}
+  +
+  \Big| 
+    \EMC \big[ \adapted^{MC}_{B^{}_{\unit\comma\time}} \big] 
+   - \E_g\big[ \adapted^{}_{B^{}_{\unit\comma\time}}
+    \big] 
+  \Big|
+\\
+\label{supp:eq:cov:MC:triangle}
+&& 
+\le
+Q^b 
+\Big(
+  \boundA
+\Big) 
+\end{eqnarray}
+Putting \eqref{supp:eq:cov:MC:triangle} into \eqref{supp:eq:cov:MC:bound}, we get
+\begin{equation}
+\cov
+\big(
+  \adapted^{MC}_{B^{}_{\unit,\time}},\adapted^{MC}_{B^{}_{\altUnit\comma\altTime}}
+\big) 
+< 
+Q^{2\Bsize} 
+\Big(
+  \boundA
+\Big).
+\end{equation}
+Now we address the situation $\time-\altTime\le K+d_{\unit,\time}$. 
+We apply Lemma~\ref{lemma:AS_bias} on the union $B^{}_{\unit\comma\time} \cup B^{}_{\altUnit\comma\altTime}$ for which the temporal depth is bounded by 
+%$d_{B^{}_{\unit\comma\time} \cup B^{}_{\altUnit\comma\altTime}}\le K+d_{\unit,\time}+d_{\altUnit,\altTime}$.
+$d \le K+d_{\unit,\time}+d_{\altUnit,\altTime}$.
+This gives
+\newcommand\boundB{(2K+d_{\unit,\time}+d_{\altUnit,\altTime})\efive^{} +\efourB}
+\begin{equation}
+\label{application:of:thm2:eq2}
+\Big| \,
+  \EMC \big[\adapted^{MC}_{\unitTimeSubset_{\unit\comma\time}}\adapted^{MC}_{\unitTimeSubset_{\altUnit\comma\altTime}}\big] - \E_{g_{}}\big[\adapted^{}_{\unitTimeSubset_{\unit\comma\time}}
+   \adapted^{}_{\unitTimeSubset_{\altUnit\comma\altTime}}
+   \big]
+\, \Big|
+< Q^{2\Bsize}
+\Big( 
+\boundB
+\Big).
+\end{equation}
+From
+Proposition~\ref{prop:cov:mix}, if $(\altUnit\comma\altTime) \notin \altB_{\unit\comma\time}$,
+\begin{equation}
+\label{supp:eq:cov:g:bound}
+\cov_{g_{}}\big(\adapted^{}_{B^{}_{\unit,\time}}
+  ,\adapted^{}_{B^{}_{\altUnit\comma\altTime}}
+  \big) < \efourA Q^{2\Bsize}.
+\end{equation}
+Now, we establish that 
+$\cov\big(\adapted^{MC}_{\unitTimeSubset_{\unit\comma\time}},
+    \adapted^{MC}_{\unitTimeSubset_{\altUnit\comma\altTime}}\big)$ 
+is close to  
+$\cov_g\big(\adapted^{}_{\unitTimeSubset_{\unit\comma\time}},
+     \adapted^{}_{\unitTimeSubset_{\altUnit\comma\altTime}}\big)$.
+\begin{eqnarray}
+\nonumber
+&& \hspace{-15mm} 
+\Big| 
+  \cov\big(\adapted^{MC}_{\unitTimeSubset_{\unit\comma\time}},
+    \adapted^{MC}_{\unitTimeSubset_{\altUnit\comma\altTime}}\big)
+  - 
+  \cov_g\big(\adapted^{}_{\unitTimeSubset_{\unit\comma\time}},
+     \adapted^{}_{\unitTimeSubset_{\altUnit\comma\altTime}}\big) 
+\Big| 
+\\
+\nonumber
+&&\le   
+\Big| \,
+  \EMC \big[\adapted^{MC}_{\unitTimeSubset_{\unit\comma\time}}\adapted^{MC}_{\unitTimeSubset_{\altUnit\comma\altTime}}\big] - \E_{g}\big[\adapted^{}_{\unitTimeSubset_{\unit\comma\time}}
+  \adapted^{}_{\unitTimeSubset_{\altUnit\comma\altTime}}
+  \big]
+\, \Big|
+\\
+\nonumber
+&& \hspace{10mm}
++ 
+\Big|
+  \EMC \big[\adapted^{MC}_{\unitTimeSubset_{\unit\comma\time}}\big]
+  \big(
+    \EMC \big[\adapted^{MC}_{\unitTimeSubset_{\altUnit\comma\altTime}}\big]
+    -  \E_g\big[\adapted^{}_{\unitTimeSubset_{\altUnit\comma\altTime}}
+  \big]
+  \big)
+\Big|
+\\
+\nonumber
+&& \hspace{10mm}
++ 
+\Big|
+  \EMC \big[\adapted^{}_{\unitTimeSubset_{\altUnit\comma\altTime}}
+  \big]
+  \big(
+    \EMC \big[\adapted^{MC}_{\unitTimeSubset_{\unit\comma\time}}\big]
+    -  \E_g\big[\adapted^{}_{\unitTimeSubset_{\unit\comma\time}}
+    \big]
+  \big)
+\Big|
+\\
+\nonumber
+&&
+\label{supp:eq:lots_of_K}
+< 
+Q^{2\Bsize}
+\Big(
+  \boundB + 2(\boundLemmaUniform)
+\Big).
+\\
+&&
+<
+Q^{2\Bsize}
+\Big(
+\PartOfBoundOffDiagonal
+\Big)
+\end{eqnarray}
+Using \myeqref{supp:eq:lots_of_K} together with \myeqref{supp:eq:cov:g:bound} to bound the $\Unit\Time(\Unit\Time-\altb)$ off-diagonal covariance terms completes the derivation of \myeqref{th:abf:lik:bound2}.
+
+\end{proof}
+
+%% lllllllllllllllllllllllll
+
+\begin{lemma} \label{lemma:AS_bias}
+Suppose Assumptions~\ref{B2}, \ref{B:temporal:mix}, \ref{B:girf} and \ref{B:XG_XA_ind}. 
+Suppose the number of particles $\Np$ exceeds the requirement for~\ref{B:girf}.
+If we write $d_B=\max_{(u_1,n_1), (u_2,n_2) \in B} |n_1-n_2|$ for $B \subset 1\mycolon U \times 1\mycolon N$,
+then for any $B$,
+\begin{equation*}
+\Big| \,
+  \EMC\big[\adapted^{MC}_{\unitTimeSubset} \big| \myvec X_{n-d_B-K,1}^A = \myvec x \big] - \E_{g}\big[\adapted^{}_{\unitTimeSubset}
+ \big| \myvec X_{n-d_B-K}=\myvec x \big]
+\, \Big|
+< Q^{|B|}(K+d_B) \epsilon_{\mathrm{B6}}^{}, \quad \forall \myvec x \in \mathbb X^U,
+\end{equation*}
+and
+\begin{equation}
+\label{thm2:eq2}
+\Big| \,
+  \EMC\big[\adapted^{MC}_{\unitTimeSubset} \big] - \E_{g}\big[\adapted^{}_{\unitTimeSubset}
+  \big]
+\, \Big|
+< Q^{|B|}(\epsilon_{\mathrm{B5}}^{} + (K+d_B) \epsilon_{\mathrm{B6}}^{}).
+\end{equation}
+\end{lemma}
+\begin{proof}
+Suppose that $\max_{(u',n')\in B} n' = n$.
+Define $\eta_\time(\myvec{x}_{\time})=1$ and, for $0\le m \le \time-1$,
+\begin{equation}
+\label{eq:eta}
+\eta_{m}(\myvec{x}_{m})
+= \E_{g} \! \left[ \, \prod_{k=m+1}^{\time} \adapted^{}_{B^{[k]}} 
+  \, \Big| \myvec{X}_{m}=\myvec{x}_{m} \right].
+\end{equation}
+We have a recursive identity
+\begin{equation}
+\label{eq:thm2:recursion}
+\eta_m(\myvec{X}_m)=\E_{g} \! \left[ \adapted^{}_{B^{[m+1]}}
+  \, \eta_{m+1}(\myvec{X}_{m+1}) \Big| \myvec{X}_m
+\right].
+\end{equation}
+By taking the expectation of \eqref{eq:eta}, we have
+\begin{equation}
+\E_{g}\big[\eta_0(\myvec{X}_0)\big]=\E_{g}\big[\adapted^{}_{B}
+  \big].
+\end{equation}
+Note that $g$ has marginal density $f_{\myvec{X}_{0}}$ for $\myvec{X}_0$.
+We analyze an {\ABFIR} approximation to \myeqref{eq:thm2:recursion}. 
+The function $\eta_{m+1}(\myvec{x})$ is not in practice computationally available for evaluation via {\ABFIR}, but the recursion nevertheless leads to a useful bound.
+Let $\myvec{X}^{\IF}_{m+1}[\np](\myvec{x}_{m})$ correspond to the variable $\myvec{X}^{IR}_{m+1,\Ninter,1,\np}$ constructed by {\ABFIR} conditional on $\myvec{X}^{\IF}_{m,1}=\myvec{x}_{m}$.
+Equivalently,  $\myvec{X}^{\IF}_{m+1}[\np](\myvec{x}_{m})$ matches the variable $\myvec{X}^{\IF}_{m+1,1}$ in {\ABFIR} if the assignment $\myvec{X}^{\IF}_{m+1,1}=\myvec{X}^{IR}_{m+1,\Ninter,1,1}$ is replaced by $\myvec{X}^{\IF}_{m+1,1}=\myvec{X}^{IR}_{m+1,\Ninter,1,\np}$ conditional on $\myvec{X}^{\IF}_{m,1}=\myvec{x}_{m}$.
+We define an approximation error $e_m(\myvec{x}_m)$ by
+\begin{equation}
+\label{thm2:eq7}
+\eta_m(\myvec{x}_m) =  
+\frac{1}{\Np}\sum_{\np=1}^{\Np}
+f_{Y_{B^{[m+1]}}|\myvec{X}_m}(\data{y}_{B^{[m+1]}}\given \myvec{x}_m)
+ \, \eta_{m+1}\big( \myvec{X}_{m+1}^{\IF}[\np](\myvec{x}_{m})\big) + e_m(\myvec{x}_{m}).
+\end{equation}
+From Assumptions~\ref{B2} and~\ref{B:girf}, $\EMC\big|e_m(\myvec{x}_m)\big|<\efive^{} \, Q^{\big|B^{[m+1:n]}\big|}$ uniformly over $\myvec{x}_m$, 
+Thus, setting $r_m = \EMC | e_m(\myvec{X}^A_{m,1}) |$, we have
+\begin{equation}
+\label{eq:lemma:r}
+r_m < \efive^{} \, Q^{\big|B^{[m+1:n]}\big|}.
+\end{equation} 
+Now, setting $\K=K+d_{\unit,\time}$, we commence to prove inductively that, for $\time-\K\le m \le \time$,
+\begin{equation}
+\label{lemma:inductive:hypothesis}
+\Bigg| \,
+  \eta_{\time-\K}(\myvec{x}) - \EMC 
+  \Big[ \eta_m(\myvec{X}^A_{m,1})
+    \prod_{k=\time-\K+1}^m 
+f_{Y_{B^{[k]}}|\myvec{X}_{k-1}}(\data{y}_{B^{[k]}}\given \myvec{X}^A_{k-1,1})
+    \Big| \myvec{X}^A_{n-\K,1}=\myvec{x}
+  \Big]
+\, \Bigg|
+< (m-n+\K)\efive \, Q^{|B|}.
+\end{equation}
+First, suppose that \myeqref{lemma:inductive:hypothesis} holds for $m$. 
+From \myeqref{thm2:eq7} and \myeqref{eq:lemma:r},
+\begin{equation}
+\left| 
+ \eta_m(\myvec x_m)
+ - 
+ \EMC\left[
+  \frac{1}{\Np}\sum_{\np=1}^{\Np}
+ f_{Y_{B^{[m+1]}}|\myvec{X}_m}(\data{y}_{B^{[m+1]}}\given \myvec{x}_m)
+ \, \eta_{m+1}\big( \myvec{X}_{m+1}^{\IF}[\np](\myvec{x}_{m})\big)
+ \right]
+\right| 
+< \efive \, Q^{\big|B^{[m+1:n]}\big|}.
+\end{equation}
+Since the particles are exchangeable, the expectation of the mean of $\Np$ particles can be replaced with the expectation of the first particle.
+Plugging in $\myvec x_m = \myvec X_{m,1}^A$ gives us
+\begin{equation}
+\label{eq:lemma:eta:bound}
+\left| 
+ \eta_m(\myvec X_{m,1}^A)
+ - 
+  f_{Y_{B^{[m+1]}}|\myvec{X}_m}\big(\data{y}_{B^{[m+1]}}\given  \myvec{X}_{m,1}^{A}\big)
+ \EMC\left[
+   \eta_{m+1}\big(  \myvec{X}_{m+1,1}^{A} \big) \middle| \myvec X_{m,1}^A
+ \right]
+\right| 
+< \efive \, Q^{\big| B^{[m+1:n]} \big| }
+\end{equation}
+Putting \myeqref{eq:lemma:eta:bound} into \myeqref{lemma:inductive:hypothesis}, for $m\le \time$, and taking an iterated expectation with respect to $\myvec{X}^A_{m,1}$, we find that \myeqref{lemma:inductive:hypothesis} holds also for $m+1$.
+Since \myeqref{lemma:inductive:hypothesis} holds trivially for $m=\time-\K$, it holds for $\time-\K\le m\le \time$ by induction.
+Then, noting $\eta_{\time}(\myvec{x})=1$, we have from \myeqref{lemma:inductive:hypothesis} that
+\[
+\left|
+\eta_{n-\K}(x)
+- \EMC \left[ \prod_{k=n-\K+1}^n 
+  f_{Y_{B^{[k]}}|\myvec{X}_{k-1}}\big(\data{y}_{B^{[k]}}\given  \myvec{X}_{k-1,1}^{A}\big)
+\middle \vert \myvec X_{n-\K, 1}^A = x \right]
+\right|
+< \K \efive \, Q^{|B|}.
+\]
+Integrating the above inequality over $\myvec x$ with respect to the law of $\myvec X_{n-\K,1}^A$, we obtain
+\begin{equation}\label{eq:AS_bias_induction_result}
+\left|
+\EMC [\eta_{n-\K}(\myvec X_{n-\K,1}^A)]
+- \EMC \left[ \prod_{k=n-\K+1}^n 
+  f_{Y_{B^{[k]}}|\myvec{X}_{k-1}}\big(\data{y}_{B^{[k]}}\given  \myvec{X}_{k-1,1}^{A}\big)
+\right]
+\right|
+< \K\efive \, Q^{| B |}.
+\end{equation}
+But under Assumption~\ref{B:XG_XA_ind}, we have
+\begin{equation}\label{eq:gammaMC_underB6}
+\EMC \left[ \prod_{k=n-\K+1}^n 
+  f_{Y_{B^{[k]}}|\myvec{X}_{k-1}}\big(\data{y}_{B^{[k]}}\given  \myvec{X}_{k-1,1}^{A}\big)
+\right]
+= \EMC \big[ \gamma^{MC}_{B}\big].
+\end{equation}
+Assumption~\ref{B:temporal:mix} says
+\begin{equation}
+\label{eq:eta:bound}
+| \eta_{n-\K}(\myvec x_{n-\K}^{(1)}) - \eta_{n-\K}(\myvec x_{n-\K}^{(2)}) |
+< \efourB \, \eta_{n-\K}(\myvec x_{n-\K}^{(2)}).
+\end{equation}
+Application of Proposition~\ref{lemma:E1E2} to \myeqref{eq:eta:bound} gives
+\begin{equation}\label{eq:Eg_EMC_eta}
+\Big| \E_g \big[ \eta_{n-\K}(\myvec X_{n-\K})\big] - \EMC \big[\eta_{n-\K}(\myvec X_{n-\K,1}^A) \big] \Big|
+< \efourB \, \E_g \big[ \eta_{n-\K}(\myvec X_{n-\K}) \big]
+< \efourB \, Q^{| B |}.
+\end{equation}
+Combining \eqref{eq:AS_bias_induction_result}, \eqref{eq:gammaMC_underB6}, and \eqref{eq:Eg_EMC_eta} completes the proof of Lemma~\ref{lemma:AS_bias}.
+\end{proof}
+
+
+\clearpage
+
+
+\clearpage
+
+\section{\secTitleSpace The correlated Brownian motion example}
+
+%bbbbbbbbbbbbbbbbbbbbb
+
+<<bm_load, echo=F>>=
+
+bm_files_dir <- paste0("bm_",bm_run_level,"/")
+if(!dir.exists(bm_files_dir)) dir.create(bm_files_dir)
+
+bm_files_list <- list.files(path=bm_files_dir,full.names=TRUE)
+for(filename in bm_files_list) load(file=filename)
+
+bm_girf_times <- sapply(split(bm_jobs$girf_time,bm_jobs$U),mean)
+bm_ubf_times <- sapply(split(bm_jobs$ubf_time,bm_jobs$U),mean)
+bm_abf_times <- sapply(split(bm_jobs$abf_time,bm_jobs$U),mean)
+bm_abfir_times <- sapply(split(bm_jobs$abfir_time,bm_jobs$U),mean)
+bm_pfilter_times <- sapply(split(bm_jobs$pfilter_time,bm_jobs$U),mean)
+bm_bpf_times <- sapply(split(bm_jobs$bpf_time,bm_jobs$U),mean)
+bm_enkf_times <- sapply(split(bm_jobs$enkf_time,bm_jobs$U),mean)
+
+@
+
+<<bm_image_plot, echo=F, fig.height=3.5, fig.width=7, out.width="6.5in", fig.cap = paste('correlated Brownian motion simulation used in the main text')>>=
+library(spatPomp)
+library(fields)
+par(mai=c(0.7,0.7,0.1,0.5))
+bm_big <- bm_list[[1]]
+image.plot(y=1:dim(states(bm_big))[1],x=time(bm_big),z=t(states(bm_big)),ylab="unit",xlab="time",col=gray.colors(33))
+@
+
+To help visualize the correlated Brownian motion model, Fig.~\ref{fig:bm_image_plot} shows one of the simulations used for the results in Figure~{\MainFigureMeaslesSlice} of the main text.
+Table~\ref{tab:bm} gives the algorithmic settings used for the filters and corresponding computational resource requirements.
+Broadly speaking, $\Rep\Np$ for {\ABF} and {AIRSIF} should be compared with $\Rep$ for {\UBF}, $\Np$ for PF, and $\Np\Nguide$ for GIRF. 
+
+
+The computational effort allocated to each algorithm in Table~\ref{tab:bm} is given in core minutes.
+{\UBF}, {\ABF} and {\ABFIR} parallelize readily, which is less true for PF and GIRF.
+Therefore, the {\UBF}, {\ABF} and {\ABFIR} implementations run on all available cores (\Sexpr{bm_cores} for this experiment)  whereas the PF and GIRF implementations run on a single core.
+If sufficient replications are being carried out to utilize all available cores, comparison of core minute utilization is equivalent to comparison of total computation time.
+However, a single replication of {\UBF}, {\ABF} or {\ABFIR} proceeds more quickly due to the parallelization. 
+
+{\ABFIR} and GIRF have computational time scaling quadratically with $\Unit$ in this example, whereas the other methods scale linearly.
+This is because the number of intermediate steps used, $\Ninter$, grows linearly with $\Unit$.
+
+The main purpose of this example is not to provide a comparison between the functional capabilities of the methods on interesting scientific problems.
+It is a toy example without the complexities that the methods are intended to address.
+This simple example does show clearly the quick decline of PF and the slower declines of GIRF and {\ABF} as dimension increases. 
+
+\begin{table}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|c|c|}
+\hline &
+  {\UBF}  &
+  {\ABF} &
+  {\ABFIR}  &
+  GIRF  &
+  PF &
+  BPF &
+  EnKF
+\\ 
+\hline 
+\rule{0mm}{4.5mm}particles,
+$\Np$ &
+  --- &
+  \Sexpr{bm_abf_Np_per_replicate} &
+  \Sexpr{bm_abfir_Np_per_replicate} &
+  \Sexpr{bm_girf_Np} &
+  \Sexpr{bm_pfilter_Np} &
+  \Sexpr{bm_bpf_Np} &
+  \Sexpr{bm_enkf_Np}
+\\
+bootstrap replications, $\Rep$ &
+  \Sexpr{bm_ubf_Nrep} &
+  \Sexpr{bm_abf_Nrep} &
+  \Sexpr{bm_abfir_Nrep} &
+  --- &
+  --- &
+  --- &
+  ---
+\\
+guide simulations, $\Nguide$ &
+  ---&
+  ---&
+  ---&
+  \Sexpr{bm_girf_nguide}&
+  --- &
+  --- &
+  ---
+\\
+lookahead lag, $L$ &
+  ---&
+  ---&
+  ---&
+  \Sexpr{bm_girf_lookahead} &
+  --- &
+  --- &
+  ---
+\\
+intermediate steps, $S$ &
+  ---&
+  --- &
+  $\Unit/2$ &
+  $\Unit$ &
+  --- &
+  --- &
+  ---
+\\
+\cline{2-4}
+\hspace{-3mm} \begin{tabular}{l}
+neighborhood, $B_{\unit\comma\time}$ \\
+or block size
+\end{tabular} &
+\multicolumn{3}{c|}{
+$ \rule[-4mm]{0mm}{11mm}
+\begin{array}{c} 
+$\big\{(\unit-1,\time),(\unit-2,\time),$ \\  $(\unit,\time-1),(\unit,\time-2)\big\}$
+\end{array}$
+} &
+  --- &
+  --- &
+  \Sexpr{bm_bpf_units_per_block} &
+  ---
+\\
+\cline{2-5}
+forecast mean, $\myvec{\mu}(\myvec{x},s,t)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{$\myvec{x}$} &
+  --- &
+  --- &
+  ---
+\\
+measurement mean, $h_{\unit\comma\time}(x)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{$x$} &
+  --- &
+  --- &
+  $x$
+\\
+\cline{4-5}
+$\tau={\VtoTheta}_{\unit\comma\time}(V,x)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{\rule{0mm}{5mm}$\sqrt{V}$}  &
+  --- &
+  --- &
+  ---
+\\
+$V={\thetaToV}_{\unit\comma\time}(\tau,x)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{$\tau^2$}  &
+  --- &
+  --- &
+  $\tau^2$
+\\
+\hline
+\rule{0mm}{4.5mm}effort (core mins, $U=\Sexpr{bm_U[1]}$) & 
+  \Sexpr{myround(bm_ubf_times[1]/60,1)} & 
+  \Sexpr{myround(bm_abf_times[1]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_abfir_times[1]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_girf_times[1]/60,1)}  & 
+  \Sexpr{myround(bm_pfilter_times[1]/60,1)} &
+  \Sexpr{myround(bm_bpf_times[1]/60,1)} &
+  \Sexpr{myround(bm_enkf_times[1]/60,1)} 
+\\
+effort  (core mins,  $U=\Sexpr{bm_U[2]}$) & 
+  \Sexpr{myround(bm_ubf_times[2]/60,1)} & 
+  \Sexpr{myround(bm_abf_times[2]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_abfir_times[2]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_girf_times[2]/60,1)} & 
+  \Sexpr{myround(bm_pfilter_times[2]/60,1)} &
+  \Sexpr{myround(bm_bpf_times[2]/60,1)} &
+  \Sexpr{myround(bm_enkf_times[2]/60,1)} 
+\\
+effort  (core mins, $U=\Sexpr{bm_U[3]}$) & 
+  \Sexpr{myround(bm_ubf_times[3]/60,1)} & 
+  \Sexpr{myround(bm_abf_times[3]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_abfir_times[3]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_girf_times[3]/60,1)} & 
+  \Sexpr{myround(bm_pfilter_times[3]/60,1)} &
+  \Sexpr{myround(bm_bpf_times[3]/60,1)} &
+  \Sexpr{myround(bm_enkf_times[3]/60,1)} 
+\\
+effort  (core mins,  $U=\Sexpr{bm_U[5]}$) & 
+  \Sexpr{myround(bm_ubf_times[5]/60,1)} & 
+  \Sexpr{myround(bm_abf_times[5]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_abfir_times[5]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_girf_times[5]/60,1)} & 
+  \Sexpr{myround(bm_pfilter_times[5]/60,1)} &
+  \Sexpr{myround(bm_bpf_times[5]/60,1)} &
+  \Sexpr{myround(bm_enkf_times[5]/60,1)}   
+\\
+effort  (core mins,  $U=\Sexpr{bm_U[7]}$) & 
+  \Sexpr{myround(bm_ubf_times[7]/60,1)} & 
+  \Sexpr{myround(bm_abf_times[7]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_abfir_times[7]*bm_cores/60,1)} & 
+  \Sexpr{myround(bm_girf_times[7]/60,1)} & 
+  \Sexpr{myround(bm_pfilter_times[7]/60,1)} &
+  \Sexpr{myround(bm_bpf_times[7]/60,1)} &
+  \Sexpr{myround(bm_enkf_times[7]/60,1)} 
+\\
+\hline
+
+\end{tabular}
+\caption{Algorithmic settings for the correlated Brownian motion numerical example. 
+Computational effort is measured in core minutes for running one filter, corresponding to a point on Figure~{\MainFigureBmScaling} in the main text. 
+The time taken for computing a single point using the parallel {\UBF}, {\ABF} and {\ABFIR} implementations is the effort divided by the number of cores, here $\Sexpr{doob_cores}$.
+The time taken for computing a single point using the single-core GIRF, PF, BPF and EnKF implementations is equal to the effort in core minutes.
+}\label{tab:bm}
+\end{center}
+\end{table}
+
+\clearpage
+
+%%%% sssssss
+
+
+%%%% mmmmmmmmmm
+
+\section{\secTitleSpace The measles example}
+
+<<measlesModel_load, echo=F>>=
+
+measles_model_dir <- "measlesModel/"
+load(file=paste0(measles_model_dir,"measles_spatPomp.rda"))  
+
+@
+
+<<measles_image_plot, echo=F, eval=F, fig.height=6, fig.width=7, out.width="6.5in", fig.cap = paste('Log(reported cases $+$ 1) for (A) the measles simulation used for the likelihood slice; (B) the corresponding UK measles data.')>>=
+library(spatPomp)
+library(fields)
+par(mai=c(0.5,0.7,0.1,0.1))
+par(mfrow=c(2,1))
+image.plot(y=1:dim(obs(measles_sim))[1],x=time(measles_sim),z=log(t(obs(measles_sim)+1)),ylab="unit",xlab="",col=gray.colors(33))
+mtext("A",side=2,line=2.5,las=1,padj=-5.5,cex=1.8)
+image.plot(y=1:dim(obs(measles_uk))[1],x=time(measles_uk),z=log(t(obs(measles_uk)+1)),ylab="unit",xlab="",col=gray.colors(33))
+mtext("B",side=2,line=2.5,las=1,padj=-5.5,cex=1.8)
+mtext("time",side=1,line=2.5)
+@
+
+
+
+
+%%%% msmsmsmsmsmsmsmsmsmsmsmsmsmsms
+
+
+<<mscale_load,cache=FALSE,echo=F>>=
+
+mscale_files_dir <- paste0("mscale_",mscale_run_level,"/")
+
+load(file=paste0(mscale_files_dir,"mscale_settings.rda"))
+load(file=paste0(mscale_files_dir,"mscale_results.rda"))
+
+if(0){
+mscale_jobs <- expand.grid(U=mscale_U,reps=1:mscale_replicates)
+mscale_jobs$U_id <- rep(seq_along(mscale_U),times=mscale_replicates)
+
+load(file=paste0(mscale_files_dir,"mscale_girf.rda"))
+
+mscale_jobs$girf_logLik <- vapply(mscale_girf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$girf_time <- vapply(mscale_girf_list,function(x) x$time,numeric(1))
+
+load(file=paste0(mscale_files_dir,"mscale_abf.rda"))
+
+mscale_jobs$abf_logLik <- vapply(mscale_abf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$abf_time <- vapply(mscale_abf_list,function(x) x$time,numeric(1))
+
+load(file=paste0(mscale_files_dir,"mscale_ubf.rda"))
+
+mscale_jobs$ubf_logLik <- vapply(mscale_ubf_list,function(x)x$logLik,numeric(1))
+mscale_jobs$ubf_time <- vapply(mscale_ubf_list,function(x) x$time,numeric(1))
+
+load(file=paste0(mscale_files_dir,"mscale_abfir.rda"))
+
+mscale_jobs$abfir_logLik <- vapply(mscale_abfir_list,function(x)x$logLik,numeric(1))
+mscale_jobs$abfir_time <- vapply(mscale_abfir_list,function(x) x$time,numeric(1))
+
+load(file=paste0(mscale_files_dir,"mscale_pfilter.rda"))
+
+mscale_jobs$pfilter_logLik <- vapply(mscale_pfilter_list,function(x)x$logLik,numeric(1))
+mscale_jobs$pfilter_time <- vapply(mscale_pfilter_list,function(x) x$time,numeric(1))
+
+mscale_results <- data.frame(
+  Method=rep(mscale_methods,each=nrow(mscale_jobs)),
+  logLik=c(
+    mscale_jobs$ubf_logLik,
+    mscale_jobs$abf_logLik,
+    mscale_jobs$abfir_logLik,
+    mscale_jobs$enkf_logLik,
+    mscale_jobs$girf_logLik,
+    mscale_jobs$pfilter_logLik
+  ),
+  Units=rep(mscale_jobs$U,reps=length(mscale_methods))
+)
+mscale_point_perturbation <- 0.25
+mscale_results$U <- mscale_results$Units+
+  rep( mscale_point_perturbation*seq(from=-1,to=1,length=length(mscale_methods)),
+    each=nrow(mscale_jobs))
+mscale_results$logLik_per_unit <- mscale_results$logLik/mscale_results$Units
+mscale_results$logLik_per_obs <- mscale_results$logLik_per_unit/mscale_N
+}
+@
+
+\begin{table}
+\renewcommand{\arraystretch}{1.2}
+  \centering
+  \begin{tabular}{|crcl|}
+    \hline
+    parameter & value & unit & description  \\  \hline
+    $\meanBeta$ & \Sexpr{myround(measles_params["R0"]*(measles_params["gamma"]+measles_params["mu"]),1)} & year$^{-1}$& mean contact rate\\
+    $\mu_{\bullet D}^{-1}$ & \Sexpr{myround(1/measles_params["mu"],1)} &year& mean duration in the population \\
+    $\mu_{EI}^{-1}$ & \Sexpr{myround(365/measles_params["sigma"],1)} &day& latent period  \\
+    $\mu_{IR}^{-1}$ & \Sexpr{myround(365/measles_params["gamma"],1)} &day& infectious period \\
+    $\sigma_{SE}$ & \Sexpr{myround(measles_params["sigmaSE"],3)} &year$^{1/2}$& process noise\\
+    $\amplitude$ & \Sexpr{myround(measles_params["amplitude"],3)} &--- & amplitude of seasonality  \\
+    $\alpha$ & \Sexpr{measles_params["alpha"]} &---& mixing exponent \\
+    $\tau$ & 4 & year & delay from birth to entry into susceptibles\\    
+%%    $\cohort$ & \Sexpr{measles_params["amplitude"]} &---& cohort fraction entering $S$ on September 6 \\
+    $\rho$ & \Sexpr{measles_params["rho"]} &---& reporting probability \\
+    $\psi$ & \Sexpr{measles_params["psi"]} &---& reporting overdispersion \\
+    $G$ & \Sexpr{measles_params["g"]} &---& gravitation constant \\  \hline
+  \end{tabular}
+  \caption{\label{tab:measles_parameters} Table of parameters for the spatiotemporal measles transmission model}
+\end{table}
+
+% Fig.~\ref{fig:slice_image_plot} shows the simulation used for the measles scaling experiment in  Figure~{\MainFigureMeaslesScaling} and the likelihood slice shown in Figure~{\MainFigureMeaslesSlice} of the main text.
+% Unit $\unit$ models the $u$th largest city in UK.
+
+
+Table~\ref{tab:measles_parameters} gives the model parameter values and Table~\ref{tab:mscale} gives the algorithmic settings used for the filters.
+The times in Table~\ref{tab:mscale} give the total time required by each algorithm to calculate all its results for Figure~{\MainFigureMeaslesScaling} in the main text, using \Sexpr{mscale_cores} cores.
+The expected forecast function $\mu(x,s,t)$ needed for {\ABFIR} and GIRF was computed using a numerical solution to the deterministic skeleton of the stochastic model, i.e, a system of ODEs with derivative matching the infinitesimal mean function of the stochastic dynamic model.
+In the specifications of $h_\unit\big(x)$, $\VtoTheta_\unit(V,x,\theta)$ and $\thetaToV_\unit(\theta,x)$, the latent process value $x$ contains a variable $C$ giving the cumulative removed infections in the current observation interval.
+
+In Table~\ref{tab:mscale}, we see that the effort allocated to {\UBF}, {\ABF} and PF scales linearly with $\Unit$, since the number of bootstrap replications and particles is fixed in this experiment. 
+GIRF computational effort scales fairly linearly in $\Unit$, since its effort is dominated by the guide simulations (which are linear in $\Unit$) rather than by the intermediate timestep calculations (which are quadratic in $\Unit$ since we carry out $\Unit$ intermediate calculations each of size linear in $\Unit$).
+The effort allocated to {\ABFIR} scales with $\Unit^2$, since {\ABFIR} is more parsimonious with guide simulations (all particles in one bootstrap replication share the same guide simulations) and so the intermediate timestep calculations dominate the effort.
+To obtain stable variance in the log likelihood estimate, the number of particles and bootstrap replications would have to grow with $\Unit$.
+However, given a constraint on total computational resources, the number of particles and bootstrap replications would have to shrink as $\Unit$ increases.
+The limit studied in this experiment is a balance between the two: the assumption is that one is prepared to invest a growing amount of computational effort as the data grow, but this should not grow too fast.
+{\ABFIR} was permitted the greatest computational effort, but two considerations balance this.
+\begin{enumerate}
+\item Parallelization. {\UBF}, {\ABF} and {\ABFIR} are trivially parallelizable. 
+The value of parallelization depends, among other things, on how many replications are being computed simultaneously and on how many cores are available.
+Nevertheless, it is helpful that the core minute effort requirement for {\ABF} and {\ABFIR} can be divided by the number of available cores to give the computational time. 
+Parallelizations of GIRF and PF can be constructed \citep{park20} but these involve non-trivial interaction between processors leading to additional algorithmic complexity and computational overhead. 
+\item Memory. 
+The intermediate timestep calculations in {\ABFIR} and GIRF do not add to the memory requirement, and the memory demands of {\UBF}, {\ABF} and {\ABFIR} are distributed across the parallel computations. 
+A basic PF implementation for a large model can become constrained by its memory requirement (linear in the number of particles) before it can match the processor effort employed by the other algorithms.
+\end{enumerate}
+
+
+<<mscale_times, echo=F>>=
+
+mscale_girf_times <- sapply(split(mscale_jobs$girf_time,mscale_jobs$U),mean)
+mscale_abf_times <- sapply(split(mscale_jobs$abf_time,mscale_jobs$U),mean)
+mscale_ubf_times <- sapply(split(mscale_jobs$ubf_time,mscale_jobs$U),mean)
+mscale_abfir_times <- sapply(split(mscale_jobs$abfir_time,mscale_jobs$U),mean)
+mscale_pfilter_times <- sapply(split(mscale_jobs$pfilter_time,mscale_jobs$U),mean)
+mscale_bpf_times <- sapply(split(mscale_jobs$bpf_time,mscale_jobs$U),mean)
+mscale_enkf_times <- sapply(split(mscale_jobs$enkf_time,mscale_jobs$U),mean)
+
+K <- mscale_bpf_units_per_block
+if(K==1) mscale_blocks_text <- "{\\Unit}" else mscale_blocks_text <- paste0("{\\Unit/",mscale_bpf_units_per_block,"}")
+
+@
+
+\begin{table}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|c|c|}
+  \hline & 
+  {\UBF}  & 
+  {\ABF} & 
+  {\ABFIR}  & 
+  GIRF &
+  EnKF &
+  PF &
+  BPF 
+\\ 
+  \hline 
+  particles, $\Np$    \rule{0mm}{4.5mm} & 
+  1 &
+  \Sexpr{mscale_abf_Np_per_replicate} & 
+  \Sexpr{mscale_abfir_Np_per_replicate} & 
+  \Sexpr{mscale_girf_Np}  & 
+  \Sexpr{mscale_enkf_Np} &
+  \Sexpr{mscale_pfilter_Np} &
+  \Sexpr{mscale_bpf_Np} 
+\\
+  replicates, $\Rep$ & 
+  \Sexpr{mscale_ubf_Nrep} & 
+  \Sexpr{mscale_abf_Nrep} & 
+  \Sexpr{mscale_abfir_Nrep} &
+  --- & 
+  --- &
+  --- &
+  ---
+\\
+  guide simulations, $\Nguide$ &
+  --- & 
+  --- &
+  --- & 
+  \Sexpr{mscale_girf_nguide} & 
+  --- &
+  --- &
+  ---
+\\
+  lookahead lag, $L$ &
+  --- &
+  --- &
+  --- & \Sexpr{mscale_girf_lookahead} & 
+  --- &
+  --- &
+  ---
+\\ 
+  intermediate steps, $S$ & 
+  --- & 
+  --- &
+  $\Unit/2$ & 
+  $\Unit$ & 
+  --- &
+  --- &
+  ---
+\\
+  \cline{2-4}
+\hspace{-3mm} \begin{tabular}{l}
+neighborhood, $B_{\unit\comma\time}$ \\
+or block size
+\end{tabular}
+&
+  \multicolumn{3}{c|}{
+    \rule[-3mm]{0mm}{8mm}$\big\{(\unit,\time-1),(\unit,\time-2)\big\}$
+  } &
+  --- &
+  --- &
+  --- &
+  \Sexpr{mscale_bpf_units_per_block} 
+\\
+  \cline{2-6}
+  
+  measurement mean, $h_{\unit\comma\time}\big(x)$ &
+  --- &
+  --- &
+  \multicolumn{3}{c|}{\rule[-3mm]{0mm}{8mm}$\rho C$} &
+  --- &
+  --- 
+\\  
+  $V=\thetaToV_{\unit\comma\time}(\psi,\rho,x)$ &
+  --- &
+  --- &
+  \multicolumn{3}{c|}{\rule[-3mm]{0mm}{8mm}$\rho(1-\rho)C + \rho^2C^2\psi^2$} &
+  --- &
+  ---
+\\
+  \cline{2-6}
+
+  forecast mean, $\myvec{\mu}(\myvec{x},s,t)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{\rule{0mm}{5mm}ODE model} &
+  --- &
+  --- &
+  ---
+\\
+  $\psi=\VtoTheta_{\unit\comma\time}(V,x)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{$\frac{\sqrt{V - \rho(1-\rho)C}}{\rho C}$} &
+  --- &
+  --- &
+  ---
+\\
+\hline
+  effort (core mins, $U=\Sexpr{mscale_U[which(mscale_U==2)]}$)   \rule{0mm}{4.5mm}  & 
+  \Sexpr{myround(mscale_ubf_times[names(mscale_girf_times)==2]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abf_times[names(mscale_girf_times)==2]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abfir_times[names(mscale_girf_times)==2]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_girf_times[names(mscale_girf_times)==2]/60,1)}  & 
+  \Sexpr{myround(mscale_enkf_times[names(mscale_girf_times)==2]/60,1)}  & 
+  \Sexpr{myround(mscale_pfilter_times[names(mscale_girf_times)==2]/60,1)} &
+  \Sexpr{myround(mscale_bpf_times[names(mscale_girf_times)==2]/60,1)} 
+\\
+  effort (core mins, $U=\Sexpr{mscale_U[which(mscale_U==4)]}$)  & 
+  \Sexpr{myround(mscale_ubf_times[names(mscale_girf_times)==4]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abf_times[names(mscale_girf_times)==4]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abfir_times[names(mscale_girf_times)==4]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_girf_times[names(mscale_girf_times)==4]/60,1)}  & 
+  \Sexpr{myround(mscale_enkf_times[names(mscale_girf_times)==4]/60,1)}  & 
+  \Sexpr{myround(mscale_pfilter_times[names(mscale_girf_times)==4]/60,1)} &
+  \Sexpr{myround(mscale_bpf_times[names(mscale_girf_times)==4]/60,1)} 
+\\
+  effort (core mins, $U=\Sexpr{mscale_U[which(mscale_U==8)]}$)  & 
+  \Sexpr{myround(mscale_ubf_times[names(mscale_girf_times)==8]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abf_times[names(mscale_girf_times)==8]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abfir_times[names(mscale_girf_times)==8]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_girf_times[names(mscale_girf_times)==8]/60,1)}  &
+  \Sexpr{myround(mscale_enkf_times[names(mscale_girf_times)==8]/60,1)}  &   
+  \Sexpr{myround(mscale_pfilter_times[names(mscale_girf_times)==8]/60,1)} &
+  \Sexpr{myround(mscale_bpf_times[names(mscale_girf_times)==8]/60,1)} 
+\\
+  effort (core mins, $U=\Sexpr{mscale_U[which(mscale_U==16)]}$)   & 
+  \Sexpr{myround(mscale_ubf_times[names(mscale_girf_times)==16]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abf_times[names(mscale_girf_times)==16]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abfir_times[names(mscale_girf_times)==16]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_girf_times[names(mscale_girf_times)==16]/60,1)}  & 
+  \Sexpr{myround(mscale_enkf_times[names(mscale_girf_times)==16]/60,1)}  & 
+  \Sexpr{myround(mscale_pfilter_times[names(mscale_girf_times)==16]/60,1)} &
+  \Sexpr{myround(mscale_bpf_times[names(mscale_girf_times)==16]/60,1)} 
+\\
+  effort (core mins, $U=\Sexpr{mscale_U[which(mscale_U==32)]}$)   & 
+  \Sexpr{myround(mscale_ubf_times[names(mscale_girf_times)==32]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abf_times[names(mscale_girf_times)==32]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_abfir_times[names(mscale_girf_times)==32]*mscale_cores/60,1)} & 
+  \Sexpr{myround(mscale_girf_times[names(mscale_girf_times)==32]/60,1)}  & 
+  \Sexpr{myround(mscale_enkf_times[names(mscale_girf_times)==32]/60,1)}  & 
+  \Sexpr{myround(mscale_pfilter_times[names(mscale_girf_times)==32]/60,1)} &
+  \Sexpr{myround(mscale_bpf_times[names(mscale_girf_times)==32]/60,1)}  
+\\
+\hline
+
+\end{tabular}
+\caption{Algorithmic settings for the measles example calculations in Figures~{\MainFigureMeaslesScaling} and~{\MainFigureMeaslesSlice}. 
+Computational effort is measured in core minutes for running one filter, corresponding to a point on Figure~\MainFigureMeaslesScaling.
+The time taken for computing a single point using the parallel {\UBF}, {\ABF} and {\ABFIR} implementations is the effort divided by the number of cores, here $\Sexpr{mscale_cores}$.
+The time taken for computing a single point using the single core GIRF, EnKF, PF and BPF implementations is equal to the effort in core minutes.
+}\label{tab:mscale}
+\end{center}
+\end{table}
+
+
+
+\clearpage
+
+\clearpage
+
+\section{\secTitleSpace Varying the neighborhood for measles}
+
+%%% nnnnnnnnnnnnnnnnnnnnn
+
+<<abfNbhd_settings,cache=FALSE,echo=F>>=
+
+abfNbhd_files_dir <- paste0("abfNbhd_",abfNbhd_run_level,"/")
+if(!dir.exists(abfNbhd_files_dir)) dir.create(abfNbhd_files_dir)
+
+stew(file=paste0(abfNbhd_files_dir,"abfNbhd_settings.rda"),{
+
+  # copy variables that should be included in the stew
+  abfNbhd_run_level <- abfNbhd_run_level 
+  abfNbhd_cores <- cores
+
+  abfNbhd_tol <- 1e-300
+
+    abfNbhd1_name <- "NBHD2"
+    abfNbhd1_nbhd <- function(object, time, unit) {
+      nbhd_list <- list()
+      if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+      if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+      return(nbhd_list)
+    }
+
+   abfNbhd2_name <- "NBHD4"
+    abfNbhd2_nbhd <- function(object, time, unit) {
+      nbhd_list <- list()
+      if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+      if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+      if(unit>1) nbhd_list <- c(nbhd_list, list(c(unit-1, time)))
+      return(nbhd_list)
+    }
+
+    abfNbhd3_name <- "NBHD5"
+    abfNbhd3_nbhd <- function(object, time, unit) {
+      nbhd_list <- list()
+      if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+      if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+      if(unit>1) nbhd_list <- c(nbhd_list, list(c(1, time)))
+      return(nbhd_list)
+    }
+
+    abfNbhd4_name <- "NBHD1"
+    abfNbhd4_nbhd <- function(object, time, unit) {
+      nbhd_list <- list()
+      if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+      return(nbhd_list)
+    }
+
+    abfNbhd5_name <- "NBHD3"
+    abfNbhd5_nbhd <- function(object, time, unit) {
+      nbhd_list <- list()
+      if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+      if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+      if(time>3) nbhd_list <- c(nbhd_list, list(c(unit, time-3)))
+      return(nbhd_list)
+    }
+
+  if(abfNbhd_run_level==1){ #######
+    abfNbhd_Np <- 10
+    abfNbhd_I <- 10
+    abfNbhd_U <- 2
+    abfNbhd_N <- 5
+    abfNbhd_replicates <- 2 
+    abfNbhd1_Np <- abfNbhd_Np
+    abfNbhd2_Np <- abfNbhd_Np
+    abfNbhd3_Np <- abfNbhd_Np
+    abfNbhd4_Np <- abfNbhd_Np
+    abfNbhd5_Np <- abfNbhd_Np
+    abfNbhd1_I <- abfNbhd_I
+    abfNbhd2_I <- abfNbhd_I
+    abfNbhd3_I <- abfNbhd_I
+    abfNbhd4_I <- abfNbhd_I
+    abfNbhd5_I <- abfNbhd_I    
+  } else if(abfNbhd_run_level==2){ #######
+    abfNbhd_Np <- 100
+    abfNbhd_I <- 500
+    abfNbhd_U <- 40
+    abfNbhd_N <- 4*26
+    abfNbhd_replicates <- 5
+    abfNbhd1_Np <- abfNbhd_Np
+    abfNbhd2_Np <- abfNbhd_Np
+    abfNbhd3_Np <- abfNbhd_Np
+    abfNbhd4_Np <- abfNbhd_Np
+    abfNbhd5_Np <- abfNbhd_Np
+    abfNbhd1_I <- abfNbhd_I
+    abfNbhd2_I <- abfNbhd_I
+    abfNbhd3_I <- abfNbhd_I
+    abfNbhd4_I <- abfNbhd_I
+    abfNbhd5_I <- abfNbhd_I    
+  } else if(abfNbhd_run_level==3){
+    abfNbhd_Np <- 200
+    abfNbhd_I <- 1000
+    abfNbhd_U <- 40
+    abfNbhd_N <- 5*26
+    abfNbhd_replicates <- 10
+    abfNbhd1_Np <- abfNbhd_Np
+    abfNbhd2_Np <- abfNbhd_Np
+    abfNbhd3_Np <- abfNbhd_Np
+    abfNbhd4_Np <- abfNbhd_Np
+    abfNbhd5_Np <- abfNbhd_Np
+    abfNbhd1_I <- abfNbhd_I
+    abfNbhd2_I <- abfNbhd_I
+    abfNbhd3_I <- abfNbhd_I
+    abfNbhd4_I <- abfNbhd_I
+    abfNbhd5_I <- abfNbhd_I    
+  } else if(abfNbhd_run_level==4){
+  } else if(abfNbhd_run_level==5){
+  } 
+
+})
+
+abfNbhd_jobs <- data.frame(reps=1:abfNbhd_replicates,U=abfNbhd_U,N=abfNbhd_N)
+
+@
+
+<<abfNbhd_spatPomp,eval=T,echo=F>>=
+abfNbhd_spatPomp <- stew(file=paste0(abfNbhd_files_dir,"abfNbhd_spatPomp.rda"),{
+
+  abfNbhd_model_dir <- "measlesModel/"
+  # note: care is required if abfNbhd_model_dir is set to something other than the default measlesModel
+  # however, it may be useful to do that while testing model variations.
+  
+  load(file=paste0(abfNbhd_model_dir,"measles_spatPomp.rda"))
+  abfNbhd_sim <- measles_subset(m_U=abfNbhd_U, m_N=abfNbhd_N)
+
+})
+@
+
+
+<<abfNbhd_nbhd,echo=F>>=
+abfNbhd_nbhd <- function(object, time, unit) {
+  nbhd_list <- list()
+  if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+  if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+  return(nbhd_list)
+}
+@
+
+<<abfNbhd1,cache=F,echo=F>>=
+abfNbhd1 <- stew(file=paste0(abfNbhd_files_dir,"abfNbhd1.rda"),seed=844424,{
+  foreach(job=iter(abfNbhd_jobs,"row")) %do% {
+    system.time(
+      abf(abfNbhd_sim, 
+        Nrep = abfNbhd1_I,
+        Np=abfNbhd1_Np,
+        nbhd = abfNbhd1_nbhd, tol=abfNbhd_tol) -> abfNbhd1_out 
+    ) -> abfNbhd1_time
+#    uncomment for debugging 
+#    list(logLik=logLik(abfNbhd1_out),time=abfNbhd1_time["elapsed"],abfNbhd1_out)
+    list(logLik=logLik(abfNbhd1_out),time=abfNbhd1_time["elapsed"])
+  } -> abfNbhd1_list
+  rm(abfNbhd1_out)
+})
+abfNbhd1_jobs <- abfNbhd_jobs
+abfNbhd1_jobs$logLik <- vapply(abfNbhd1_list,function(x)x$logLik,numeric(1))
+abfNbhd1_jobs$time <- vapply(abfNbhd1_list,function(x) x$time,numeric(1))
+abfNbhd1_jobs$Method <- abfNbhd1_name
+@
+
+<<abfNbhd2,cache=F,echo=F>>=
+abfNbhd2 <- stew(file=paste0(abfNbhd_files_dir,"abfNbhd2.rda"),seed=389855,{
+  foreach(job=iter(abfNbhd_jobs,"row")) %do% {
+    system.time(
+      abf(abfNbhd_sim, 
+        Nrep = abfNbhd2_I,
+        Np=abfNbhd2_Np,
+        nbhd = abfNbhd2_nbhd, tol=abfNbhd_tol) -> abfNbhd2_out 
+    ) -> abfNbhd2_time
+#    uncomment for debugging 
+#    list(logLik=logLik(abfNbhd2_out),time=abfNbhd2_time["elapsed"],abfNbhd2_out)
+    list(logLik=logLik(abfNbhd2_out),time=abfNbhd2_time["elapsed"])
+  } -> abfNbhd2_list
+  rm(abfNbhd2_out)
+})
+abfNbhd2_jobs <- abfNbhd_jobs
+abfNbhd2_jobs$logLik <- vapply(abfNbhd2_list,function(x)x$logLik,numeric(1))
+abfNbhd2_jobs$time <- vapply(abfNbhd2_list,function(x) x$time,numeric(1))
+abfNbhd2_jobs$Method <-  abfNbhd2_name
+@
+
+<<abfNbhd3,cache=F,echo=F>>=
+abfNbhd3 <- stew(file=paste0(abfNbhd_files_dir,"abfNbhd3.rda"),seed=186711,{
+  foreach(job=iter(abfNbhd_jobs,"row")) %do% {
+    system.time(
+      abf(abfNbhd_sim,
+        Nrep = abfNbhd3_I,
+        Np=abfNbhd3_Np,
+        nbhd = abfNbhd3_nbhd, tol=abfNbhd_tol) -> abfNbhd3_out
+    ) -> abfNbhd3_time
+#    uncomment for debugging
+#    list(logLik=logLik(abfNbhd3_out),time=abfNbhd3_time["elapsed"],abfNbhd3_out)
+    list(logLik=logLik(abfNbhd3_out),time=abfNbhd3_time["elapsed"])
+  } -> abfNbhd3_list
+  rm(abfNbhd3_out)
+})
+abfNbhd3_jobs <- abfNbhd_jobs
+abfNbhd3_jobs$logLik <- vapply(abfNbhd3_list,function(x)x$logLik,numeric(1))
+abfNbhd3_jobs$time <- vapply(abfNbhd3_list,function(x) x$time,numeric(1))
+abfNbhd3_jobs$Method <-  abfNbhd3_name
+@
+
+<<abfNbhd4,cache=F,echo=F>>=
+abfNbhd4 <- stew(file=paste0(abfNbhd_files_dir,"abfNbhd4.rda"),seed=186711,{
+  foreach(job=iter(abfNbhd_jobs,"row")) %do% {
+    system.time(
+      abf(abfNbhd_sim,
+        Nrep = abfNbhd4_I,
+        Np=abfNbhd4_Np,
+        nbhd = abfNbhd4_nbhd, tol=abfNbhd_tol) -> abfNbhd4_out
+    ) -> abfNbhd4_time
+#    uncomment for debugging
+#    list(logLik=logLik(abfNbhd4_out),time=abfNbhd4_time["elapsed"],abfNbhd4_out)
+    list(logLik=logLik(abfNbhd4_out),time=abfNbhd4_time["elapsed"])
+  } -> abfNbhd4_list
+  rm(abfNbhd4_out)
+})
+abfNbhd4_jobs <- abfNbhd_jobs
+abfNbhd4_jobs$logLik <- vapply(abfNbhd4_list,function(x)x$logLik,numeric(1))
+abfNbhd4_jobs$time <- vapply(abfNbhd4_list,function(x) x$time,numeric(1))
+abfNbhd4_jobs$Method <-  abfNbhd4_name
+@
+
+<<abfNbhd5,cache=F,echo=F,eval=T>>=
+abfNbhd5 <- stew(file=paste0(abfNbhd_files_dir,"abfNbhd5.rda"),seed=186711,{
+  foreach(job=iter(abfNbhd_jobs,"row")) %do% {
+    system.time(
+      abf(abfNbhd_sim,
+        Nrep = abfNbhd5_I,
+        Np=abfNbhd5_Np,
+        nbhd = abfNbhd5_nbhd, tol=abfNbhd_tol) -> abfNbhd5_out
+    ) -> abfNbhd5_time
+#    uncomment for debugging
+#    list(logLik=logLik(abfNbhd5_out),time=abfNbhd5_time["elapsed"],abfNbhd5_out)
+    list(logLik=logLik(abfNbhd5_out),time=abfNbhd5_time["elapsed"])
+  } -> abfNbhd5_list
+  rm(abfNbhd5_out)
+})
+abfNbhd5_jobs <- abfNbhd_jobs
+abfNbhd5_jobs$logLik <- vapply(abfNbhd5_list,function(x)x$logLik,numeric(1))
+abfNbhd5_jobs$time <- vapply(abfNbhd5_list,function(x) x$time,numeric(1))
+abfNbhd5_jobs$Method <-  abfNbhd5_name
+@
+
+
+<<abfNbhd_loglik_plot, echo=F, fig.align='center', fig.height=4, fig.width=4, out.width="3in", fig.cap = paste('log likelihood estimates for simulated data from the measles model using {\\ABF}, with varying neighborhoods.')>>=
+
+abfNbhd_results <- rbind(abfNbhd1_jobs,abfNbhd2_jobs,abfNbhd3_jobs,abfNbhd4_jobs,abfNbhd5_jobs)
+#abfNbhd_results <- rbind(abfNbhd1_jobs,abfNbhd2_jobs,abfNbhd3_jobs,abfNbhd4_jobs)
+#abfNbhd_results <- rbind(abfNbhd1_jobs,abfNbhd2_jobs,abfNbhd3_jobs)
+abfNbhd_results$logLik_per_unit <- abfNbhd_results$logLik/abfNbhd_results$U
+abfNbhd_results$logLik_per_obs <- abfNbhd_results$logLik_per_unit/abfNbhd_N
+
+save(file=paste0(abfNbhd_files_dir,"abfNbhd_results.rda"),abfNbhd_results)
+
+abfNbhd_max <- max(abfNbhd_results$logLik_per_obs)
+
+#ggplot(abfNbhd_results,mapping = aes(x = Unit, y = logLik_per_obs, group=Method,color=Method)) +
+#  geom_point() +
+#  coord_cartesian(ylim=c(abfNbhd_max-2,abfNbhd_max))+
+#  ylab("log likelihood per observation")
+# qplot(Method,logLik,data=abfNbhd_results,geom="boxplot")
+qplot(Method,logLik_per_obs,data=abfNbhd_results,
+  ylab="log likelihood per unit per time",
+  xlab="Neighborhood")
+@
+
+We compared five different neighborhoods for the measles model:
+\begin{center}
+\begin{tabular}{lll}
+\hline
+NBHD1 & One co-located lag & $\{(\unit,\time-1)\}$ 
+\\
+NBHD2 & Two co-located lags & $\{(\unit,\time-1),(\unit,\time-2)\}$ 
+\\
+NBHD3 & Three co-located lags & $\{(\unit,\time-1),(\unit,\time-2),(\unit,\time-3)\}$ 
+\\
+NBHD4 & Two co-located lags and the previous city& $\{(\unit,\time-1),(\unit,\time-2),(\unit-1,\time)\}$ 
+\\
+NBHD5 & Two co-located lags and London& $\{(\unit,\time-1),(\unit,\time-2),(1,\time)\}$ 
+\\
+\hline
+\end{tabular}
+\end{center}
+We filtered simulated data for $U=\Sexpr{abfNbhd_U}$ and $N=\Sexpr{abfNbhd_N}$, with $\Sexpr{abfNbhd_replicates}$ replications.
+We used {\ABF} with $\Sexpr{abfNbhd1_Np}$ particles on each of $\Sexpr{abfNbhd1_I}$ bootstrap replications.
+The results are shown in Fig.~\ref{fig:abfNbhd_loglik_plot}.
+Larger neighborhoods should increase the expected likelihood, but their increased Monte Carlo variability can decrease the expected log likelihood due to Jensen's inequality.
+In this case, we see that a neighborhood of two co-located lags provides a reasonable bias-variance tradeoff.
+The time taken for the above calculation was insensitive to the size of the neighborhood.
+The total run time for each neighborhood in Fig.~\ref{fig:abfNbhd_loglik_plot} was 
+\Sexpr{myround(sum(abfNbhd1_jobs$time)/60,1)} mins for NBHD1,
+\Sexpr{myround(sum(abfNbhd2_jobs$time)/60,1)} mins for NBHD2,
+\Sexpr{myround(sum(abfNbhd3_jobs$time)/60,1)} mins for NBHD3,
+\Sexpr{myround(sum(abfNbhd4_jobs$time)/60,1)} mins for NBHD4,
+\Sexpr{myround(sum(abfNbhd5_jobs$time)/60,1)} mins for NBHD5.
+
+\clearpage
+
+
+
+%%%%% lzlzlzlzlzlz
+
+\clearpage
+
+\section{\secTitleSpace A Lorenz-96 example}
+
+
+<<lz_settings,cache=FALSE,echo=F>>=
+
+lz_files_dir <- paste0("lz_",lz_run_level,"/")
+if(!dir.exists(lz_files_dir)) dir.create(lz_files_dir)
+
+# lz_files_dir <- "lz_5_nbhd2/"
+
+lz_params <- c(F=8, sigma=1, tau=1)
+
+stew(file=paste0(lz_files_dir,"lz_settings.rda"),{
+
+  # copy variables that should be included in the stew
+  lz_run_level <- lz_run_level 
+  lz_cores <- cores
+
+  lz_tol <- 1e-300
+
+  if(lz_run_level==1){
+    lz_U <- c(8, 4)
+    lz_N <- 2
+    lz_replicates <- 2 # number of Monte Carlo replicates
+    lz_girf_Np <- 20
+    lz_girf_lookahead <- 2
+    lz_girf_nguide <- 10
+    lz_pfilter_Np <- 100
+    lz_abf_Nrep <- 3
+    lz_abf_Np_per_replicate <- 10
+    lz_ubf_Nrep <- 20
+    lz_abfir_Nrep <- lz_abf_Nrep
+    lz_abfir_Np_per_replicate <- lz_abf_Np_per_replicate
+    lz_enkf_Np <- 20
+    lz_bpf_Np <- 20
+    lz_bpf_units_per_block <- 2
+  } else if(lz_run_level==2){ 
+    lz_U <- c(32,16,8,4)
+    lz_N <- 20
+    lz_replicates <- 4 # number of Monte Carlo replicates
+    lz_girf_Np <- 1000
+    lz_girf_lookahead <- 2
+    lz_girf_nguide <- 50
+    lz_pfilter_Np <- 50000
+    lz_abf_Nrep <- 500
+    lz_abf_Np_per_replicate <- 100
+    lz_ubf_Nrep <- 10000
+    lz_abfir_Nrep <- 50
+    lz_abfir_Np_per_replicate <- 50
+    lz_enkf_Np <- 10000
+    lz_bpf_Np <- 10000
+    lz_bpf_units_per_block <- 2
+  } else if(lz_run_level==3){
+    lz_replicates <- 5 # number of Monte Carlo replicates
+    lz_U <- c(40,30,20,10,5)
+    lz_N <- 10
+    lz_girf_Np <- 1000
+    lz_girf_lookahead <- 2
+    lz_girf_nguide <- 50
+    lz_pfilter_Np <- 50000
+    lz_abf_Nrep <- 400
+    lz_abf_Np_per_replicate <- 400
+    lz_ubf_Nrep <- 5000
+    lz_abfir_Nrep <- 200
+    lz_abfir_Np_per_replicate <- 200
+    lz_enkf_Np <- 2000
+    lz_bpf_Np <- 10000
+    lz_bpf_units_per_block <- 3
+  } else if(lz_run_level==4){
+    lz_replicates <- 5 # number of Monte Carlo replicates
+    lz_U <- c(60, 50, 40, 30, 20, 10, 5)
+    lz_N <- 50
+    lz_girf_Np <- 2000
+    lz_girf_lookahead <- 1
+    lz_girf_nguide <- 50
+    lz_pfilter_Np <- 100000
+    lz_abf_Nrep <- 400
+    lz_abf_Np_per_replicate <- 400
+    lz_ubf_Nrep <- 40000
+    lz_abfir_Nrep <- 200
+    lz_abfir_Np_per_replicate <- 200
+    lz_enkf_Np <- 5000
+    lz_bpf_Np <- 20000
+    lz_bpf_units_per_block <- 4
+  } else if(lz_run_level==5){
+    lz_replicates <- 5 # number of Monte Carlo replicates
+    lz_U <- c(50, 40, 30, 20, 16, 12, 10, 8, 6, 4)
+    lz_N <- 50
+    lz_girf_Np <- 1000
+    lz_girf_lookahead <- 2
+    lz_girf_nguide <- 50
+    lz_pfilter_Np <- 100000
+    lz_abf_Nrep <- 400
+    lz_abf_Np_per_replicate <- 400
+    lz_ubf_Nrep <- 40000
+    lz_abfir_Nrep <- 200
+    lz_abfir_Np_per_replicate <- 200
+    lz_enkf_Np <- 10000
+    lz_bpf_Np <- 10000
+    lz_bpf_units_per_block <- 4
+  }
+
+  lz_dt <- 0.005
+  lz_dt_obs <- 0.5
+  lz_ivp_mean <- 5
+  lz_ivp_sd <- 2
+  
+  set.seed(4512)
+  lz_list <- foreach(u=lz_U) %do% {
+    lz1 <- lorenz(
+      U=u, N=lz_N,
+      dt=lz_dt,dt_obs=lz_dt_obs,
+      regular_params=lz_params)
+    lz_ivps <- rnorm(u,mean=lz_ivp_mean,sd=lz_ivp_sd)
+    names(lz_ivps) <- paste0("X",1:u,"_0")
+    lz1_params <- coef(lz1)
+    lz1_params[names(lz_ivps)] <- lz_ivps
+    simulate(lz1,params=lz1_params)
+  }
+})
+
+lz_jobs <- expand.grid(U=lz_U,reps=1:lz_replicates)
+lz_jobs$U_id <- rep(seq_along(lz_U),times=lz_replicates)
+
+@
+
+
+
+Our primary motivation for {\ABF} and {\ABFIR} is application to population dynamics arising in ecological and epidemiological models.
+Geophysical models provide an alternative situation involving spatiotemporal data analysis.
+We compare methods on the Lorenz-96 model, a nonlinear chaotic system providing a toy model for global atmospheric circulation \citep{lorenz96,vankekem18}.
+We consider a stochastic Lorenz-96 model with added Gaussian process noise \citep{park20} defined
+as the solution to the following system of stochastic differential equations,
+\begin{equation}
+  dX_{\unit}(t) =
+\big \{
+\big(X_{\unit+1}(t) - X_{\unit-2}(t)\big)
+\cdot X_{\unit-1}(t) - X_{\unit}(t) + F
+\big\} dt
++ \sigma_p dB_{\unit}(t), \qquad \unit \in \seq{1}{\Unit}.
+  \label{eqn:stoLorenz}\end{equation}
+We define $X_{0} = X_{\Unit}$, $X_{-1} = X_{\Unit-1}$, and $X_{\Unit+1} = X_{1}$ so that the $\Unit$ spatial locations are placed on a circle.
+The terms $\{B_{\unit}(t), \unit \in \seq{1}{\Unit} \}$ denote $\Unit$ independent standard Brownian motions.
+$F$ is a forcing constant, and we use the value $F{\,=\,}8$ which was demonstrated by \citet{lorenz96} to induce chaotic behavior.
+The process noise parameter is set to $\sigma_p=\Sexpr{coef(lz_list[[1]])["sigma"]}$.
+The system is started with initial state $X_{\unit}(0)$ drawn as an independent normal random variable with mean $\Sexpr{lz_ivp_mean}$ and standard deviation $\Sexpr{lz_ivp_sd}$ for $\unit\in \seq{1}{\Unit}$.
+This initialization leads to short transient behavior.
+Observations are independently made for each dimension at 
+%%%%%%%%%%
+%%%%%%%%%% $t_\time = \Sexpr{lz_dt_obs} \time$ 
+%%%%%%%%%%
+$t_\time = \time$ 
+for $\time \in \seq{1}{\Time}$ with Gaussian measurement noise of mean zero and standard deviation $\tau=\Sexpr{coef(lz_list[[1]])["tau"]}$,
+\begin{equation}
+Y_{\unit, \time} = X_{\unit}(t_{\time}) + \eta_{\unit, \time}\, \hspace{20mm} \eta_{\unit, \time} \sim N(0, \tau^2).
+\end{equation}
+We used an Euler-Maruyama method for numerical approximation of the sample paths of $\{\myvec{X}(t)\}$, with timestep of $\Sexpr{lz_dt}$. 
+A simulation from this model is shown in Fig.~\ref{fig:lz_image_plot}.
+
+The ensemble Kalman filter (EnKF) is a widely used filtering method in weather forecasting for high dimensional systems \citep{evensen96}.  
+EnKF involves a local Gaussian approximation which is problematic in highly nonlinear systems \citep{ades15}.
+Methods that make local Gaussian assumptions like EnKF are necessary to scale up to the dimensions of the problems in weather forecasting. 
+Figure~\ref{fig:lz_loglik_plot} shows that for a small number of units, the basic particle filter (PF) and GIRF out-perform EnKF.
+Then, as the number of spatial units increases, the performance of PF rapidly deteriorates whereas GIRF continues to perform well up to a moderate number of units.
+{\UBF}, {\ABF}, and particularly {\ABFIR}, scales well despite under-performing EnKF on this example.
+The additive Gaussian observation and process noise in the Lorenz-96 model is well suited to the approximations involved in EnKF.
+By contrast, it is less clear how to apply EnKF to discrete population non-Gaussian models such as the measles example, and how effective the resulting approximations might be.
+
+
+<<lz_nbhd,echo=F>>=
+lz_nbhd <- function(object, time, unit) {
+  nunits <- length(unit_names(object))
+  nbhd_list <- list()
+  if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+  if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+  if(unit>1) nbhd_list <- c(nbhd_list, list(c(unit-1, time)))
+  if(unit>2) nbhd_list <- c(nbhd_list, list(c(unit-2, time)))
+  return(nbhd_list)
+}
+
+lz_nbhd2 <- function(object, time, unit) {
+  nunits <- length(unit_names(object))
+  nbhd_list <- list()
+  if(time>1) nbhd_list <- c(nbhd_list, list(c(unit, time-1)))
+  if(time>2) nbhd_list <- c(nbhd_list, list(c(unit, time-2)))
+  return(nbhd_list)
+}
+
+
+@
+
+<<lz_girf,cache=F,echo=F>>=
+lz_girf <- stew(file=paste0(lz_files_dir,"lz_girf.rda"),seed=5981724,{
+  foreach(job=iter(lz_jobs,"row")) %dopar% {
+    system.time(
+      girf(lz_list[[job$U_id]], method='adams',
+        Np=lz_girf_Np,
+        Ninter = job$U,
+        lookahead = lz_girf_lookahead,
+        Nguide = lz_girf_nguide,
+        tol = lz_tol) -> lz_girf_out 
+    ) -> lz_girf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(lz_girf_out),time=lz_girf_time["elapsed"],lz_girf_out)
+    list(logLik=logLik(lz_girf_out),time=lz_girf_time["elapsed"])
+  } -> lz_girf_list
+})
+lz_jobs$girf_logLik <- vapply(lz_girf_list,function(x)x$logLik,numeric(1))
+lz_jobs$girf_time <- vapply(lz_girf_list,function(x) x$time,numeric(1))
+@
+
+<<lz_abf,cache=F,echo=F>>=
+lz_abf <- stew(file=paste0(lz_files_dir,"lz_abf.rda"),seed=844424,{
+  foreach(job=iter(lz_jobs,"row")) %do% {
+    system.time(
+      abf(lz_list[[job$U_id]], 
+        Nrep = lz_abf_Nrep,
+        Np=lz_abf_Np_per_replicate,
+        nbhd = lz_nbhd, tol=lz_tol) -> lz_abf_out 
+    ) -> lz_abf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(lz_abf_out),time=lz_abf_time["elapsed"],lz_abf_out)
+    list(logLik=logLik(lz_abf_out),time=lz_abf_time["elapsed"])
+  } -> lz_abf_list
+})
+lz_jobs$abf_logLik <- vapply(lz_abf_list,function(x)x$logLik,numeric(1))
+lz_jobs$abf_time <- vapply(lz_abf_list,function(x) x$time,numeric(1))
+
+@
+
+<<lz_ubf,cache=F,echo=F>>=
+lz_ubf <- stew(file=paste0(lz_files_dir,"lz_ubf.rda"),seed=844424,{
+  foreach(job=iter(lz_jobs,"row")) %do% {
+    system.time(
+      abf(lz_list[[job$U_id]], 
+        Nrep = lz_ubf_Nrep,
+        Np=1,
+        nbhd = lz_nbhd, tol=lz_tol) -> lz_ubf_out 
+    ) -> lz_ubf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(lz_ubf_out),time=lz_ubf_time["elapsed"],lz_ubf_out)
+    list(logLik=logLik(lz_ubf_out),time=lz_ubf_time["elapsed"])
+  } -> lz_ubf_list
+})
+lz_jobs$ubf_logLik <- vapply(lz_ubf_list,function(x)x$logLik,numeric(1))
+lz_jobs$ubf_time <- vapply(lz_ubf_list,function(x) x$time,numeric(1))
+
+@
+
+
+<<lz_ubf2,cache=F,echo=F,eval=F>>=
+lz_ubf2 <- stew(file=paste0(lz_files_dir,"lz_ubf2.rda"),seed=844424,{
+  foreach(job=iter(lz_jobs,"row")) %do% {
+    system.time(
+      abf(lz_list[[job$U_id]],
+        Nrep = lz_ubf_Nrep,
+        Np=1,
+        nbhd = lz_nbhd2, tol=lz_tol) -> lz_ubf2_out
+    ) -> lz_ubf2_time
+#    uncomment for debugging
+#    list(logLik=logLik(lz_ubf2_out),time=lz_ubf2_time["elapsed"],lz_ubf2_out)
+    list(logLik=logLik(lz_ubf2_out),time=lz_ubf2_time["elapsed"])
+  } -> lz_ubf2_list
+})
+lz_jobs$ubf2_logLik <- vapply(lz_ubf2_list,function(x)x$logLik,numeric(1))
+lz_jobs$ubf2_time <- vapply(lz_ubf2_list,function(x) x$time,numeric(1))
+
+@
+
+<<lz_abfir,cache=F,echo=F,eval=T>>=
+lz_abfir <- stew(file=paste0(lz_files_dir,"lz_abfir.rda"),seed=53398,{
+  foreach(job=iter(lz_jobs,"row")) %do% {
+    system.time(
+      abfir(lz_list[[job$U_id]], method='adams',
+        Nrep = as.integer(lz_abfir_Nrep),
+        Np=lz_abfir_Np_per_replicate,
+        Ninter = as.integer(job$U/2),
+        nbhd = lz_nbhd, tol=lz_tol) -> lz_abfir_out 
+    ) -> lz_abfir_time
+#    uncomment for debugging 
+#    list(logLik=logLik(lz_abfir_out),time=lz_abfir_time["elapsed"],lz_abfir_out)
+    list(logLik=logLik(lz_abfir_out),time=lz_abfir_time["elapsed"])
+  } -> lz_abfir_list
+})
+lz_jobs$abfir_logLik <- vapply(lz_abfir_list,function(x)x$logLik,numeric(1))
+lz_jobs$abfir_time <- vapply(lz_abfir_list,function(x) x$time,numeric(1))
+@
+
+
+
+<<lz_enkf,cache=F,echo=F>>=
+
+lz_h <- function(state.vec, param.vec){
+  ix<-grep('X',names(state.vec))
+  state.vec[ix]
+}
+
+lz_enkf <- stew(file=paste0(lz_files_dir,"lz_enkf.rda"),seed=837509,{
+  foreach(job=iter(lz_jobs,"row")) %dopar% {
+    system.time(
+      enkf(lz_list[[job$U_id]], 
+        Np=lz_enkf_Np,
+        h = lz_h,
+        R = diag((coef(lz_list[[job$U_id]])["tau"])^2, nrow = job$U)  
+      ) -> lz_enkf_out 
+    ) -> lz_enkf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(lz_enkf_out),time=lz_enkf_time["elapsed"],lz_enkf_out)
+    list(logLik=logLik(lz_enkf_out),time=lz_enkf_time["elapsed"])
+  } -> lz_enkf_list
+})
+lz_jobs$enkf_logLik <- vapply(lz_enkf_list,function(x)x$logLik,numeric(1))
+lz_jobs$enkf_time <- vapply(lz_enkf_list,function(x) x$time,numeric(1))
+
+@
+
+
+
+<<lz_pfilter,cache=F,echo=F>>=
+lz_pfilter <- stew(file=paste0(lz_files_dir,"lz_pfilter.rda"),seed=53285,{
+  foreach(job=iter(lz_jobs,"row")) %dopar% {
+    system.time(
+      pfilter(lz_list[[job$U_id]],Np=lz_pfilter_Np) -> lz_pfilter_out
+    ) -> lz_pfilter_time
+#    uncomment for debugging 
+#    list(logLik=logLik(lz_pfilter_out),time=lz_pfilter_time["elapsed"],lz_pfilter_out)
+    list(logLik=logLik(lz_pfilter_out),time=lz_pfilter_time["elapsed"])
+  } -> lz_pfilter_list
+})
+lz_jobs$pfilter_logLik <- vapply(lz_pfilter_list,function(x)x$logLik,numeric(1))
+lz_jobs$pfilter_time <- vapply(lz_pfilter_list,function(x) x$time,numeric(1))
+@
+
+<<lz_bpf,cache=F,echo=F>>=
+lz_bpf <- stew(file=paste0(lz_files_dir,"lz_bpf.rda"),seed=53285,{
+  foreach(job=iter(lz_jobs,"row")) %dopar% {
+    system.time(
+      bpfilter(lz_list[[job$U_id]],
+        Np=lz_bpf_Np,
+	block_size=lz_bpf_units_per_block) -> lz_bpf_out
+    ) -> lz_bpf_time
+#    uncomment for debugging 
+#    list(logLik=logLik(lz_bpf_out),time=lz_bpf_time["elapsed"],lz_bpf_out)
+    list(logLik=lz_bpf_out@loglik,time=lz_bpf_time["elapsed"])
+  } -> lz_bpf_list
+})
+lz_jobs$bpf_logLik <- vapply(lz_bpf_list,function(x)x$logLik,numeric(1))
+lz_jobs$bpf_time <- vapply(lz_bpf_list,function(x) x$time,numeric(1))
+@
+
+<<lz_loglik_plot, echo=F, fig.align='center', fig.height=4, fig.width=5.5, out.width="4.5in", fig.cap = paste('Log likelihood estimates for a Lorenz-96 model of various dimensions. {\\UBF}, {\\ABF} and {\\ABFIR} are compared with a guided intermediate resampling filter (GIRF), a standard particle filter (PF), a block particle filter (BPF) and an ensemble Kalman filter (EnKF).')>>=
+
+
+# put output in tall format for plotting
+#lz_methods <- c("ABF", "ABF-IR","ENKF","GIRF","PF")
+lz_methods <- c("ABF", "ABF-IR","UBF","EnKF","GIRF","PF","BPF")
+#lz_methods <- c("ABF","UBF","ENKF","GIRF","PF")
+lz_results <- data.frame(
+  Method=rep(lz_methods,each=nrow(lz_jobs)),
+  logLik=c(
+    lz_jobs$abf_logLik,
+    lz_jobs$abfir_logLik,
+    lz_jobs$ubf_logLik,
+    lz_jobs$enkf_logLik,
+    lz_jobs$girf_logLik,
+    lz_jobs$pfilter_logLik,
+    lz_jobs$bpf_logLik
+  ),
+  Units=rep(lz_jobs$U,reps=length(lz_methods))
+)
+lz_point_perturbation <- 1
+lz_results$U <- lz_results$Units+
+  rep( lz_point_perturbation*seq(from=-1,to=1,length=length(lz_methods)),
+    each=nrow(lz_jobs))
+lz_results$logLik_per_unit <- lz_results$logLik/lz_results$Units
+lz_results$logLik_per_obs <- lz_results$logLik_per_unit/lz_N
+
+save(file=paste0(lz_files_dir,"lz_results.rda"),lz_results,lz_jobs)
+
+lz_max <- max(lz_results$logLik_per_obs,na.rm=T)
+
+ggplot(lz_results,mapping = aes(x = U, y = logLik_per_obs, group=Method,color=Method,shape=Method,linetype=Method)) +
+  scale_linetype_manual(values=c(1,1,1,1,2,2,2)) +
+  scale_shape_manual(values=c(1,2,4,5,1,2,4)) +
+  theme(legend.key.width = unit(1,"cm"))+
+  geom_point() +
+  stat_summary(fun=mean, geom="line") +
+  coord_cartesian(ylim=c(lz_max-2,lz_max))+
+  ylab("log likelihood per observation")
+
+
+@
+
+
+<<lz_load, echo=F>>=
+
+# lz_files_list <- list.files(path=lz_files_dir,full.names=TRUE)
+# for(filename in lz_files_list) load(file=filename)
+
+lz_girf_times <- sapply(split(lz_jobs$girf_time,lz_jobs$U),mean)
+lz_abf_times <- sapply(split(lz_jobs$abf_time,lz_jobs$U),mean)
+lz_ubf_times <- sapply(split(lz_jobs$ubf_time,lz_jobs$U),mean)
+
+lz_abfir_times <- sapply(split(lz_jobs$abfir_time,lz_jobs$U),mean)
+
+lz_pfilter_times <- sapply(split(lz_jobs$pfilter_time,lz_jobs$U),mean)
+lz_enkf_times <- sapply(split(lz_jobs$enkf_time,lz_jobs$U),mean)
+lz_bpf_times <- sapply(split(lz_jobs$bpf_time,lz_jobs$U),mean)
+
+
+lz_K <- lz_bpf_units_per_block
+if(lz_K==1) lz_blocks_text <- "{\\Unit}" else lz_blocks_text <- paste0("{\\Unit/",lz_bpf_units_per_block,"}")
+
+@
+
+<<lz_image_plot, echo=F, fig.height=3.5, fig.width=7, out.width="6.5in", fig.cap = paste('Lorenz \'96 simulation used in the main text')>>=
+library(fields)
+lz_obj <- lz_list[[which.max(lz_U)]]
+par(mai=c(0.7,0.7,0.1,0.5))
+image.plot(
+  y=1:dim(states(lz_obj))[1],
+  x=time(lz_obj),z=t(states(lz_obj)),
+  ylab="unit",xlab="time",col=gray.colors(33)
+)
+@
+
+
+\begin{table}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|c|c|}
+\hline &
+  {\UBF} &
+  {\ABF} &
+  {\ABFIR} &
+  GIRF &
+  PF &
+  EnKF &
+  BPF
+\\ 
+\hline 
+\rule{0mm}{4.5mm}particles, $\Np$ &
+  1 &
+  \Sexpr{lz_abf_Np_per_replicate} &
+  \Sexpr{lz_abfir_Np_per_replicate} &
+  \Sexpr{lz_girf_Np}  &
+  \Sexpr{lz_pfilter_Np} &
+  \Sexpr{lz_enkf_Np} &
+  \Sexpr{lz_bpf_Np} 
+\\
+bootstrap replicates, $\Rep$ &
+  \Sexpr{lz_ubf_Nrep} &
+  \Sexpr{lz_abf_Nrep} &
+  \Sexpr{lz_abfir_Nrep} &
+  --- &
+  --- &
+  --- &
+  ---
+\\
+guide simulations, $\Nguide$ &
+  --- &
+  --- &
+  --- &
+  \Sexpr{lz_girf_nguide} &
+  --- &
+  --- &
+  ---
+\\
+lookahead lag, $L$ &
+  --- &
+  --- &
+  --- &
+  \Sexpr{lz_girf_lookahead} &
+  --- &
+  --- &
+  ---
+\\ 
+intermediate steps, $S$ &
+  --- &
+  --- &
+  $\Unit/2$ &
+  $\Unit$ &
+  --- &
+  --- &
+  ---
+\\
+\cline{2-4}
+
+\hspace{-2mm}\begin{tabular}{l}
+neighborhood, $B_{\unit\comma\time}$ \\
+or block size
+\end{tabular}
+&
+  \multicolumn{3}{c|}{
+    $ \rule[-4mm]{0mm}{11mm}
+    \begin{array}{c} 
+    $\big\{(\unit,\time-1),(\unit,\time-2),$ \\
+    $(\unit-1,\time),(\unit-2,\time)\big\}$
+    \end{array}$
+  } &
+  --- &
+  --- &
+  --- &
+  \Sexpr{lz_bpf_units_per_block}
+\\
+\cline{2-5}
+forecast mean, $\myvec{\mu}(\myvec{x},s,t)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{ODE model} &
+  --- &
+  --- &
+  ---
+\\
+measurement mean, $h_{\unit\comma\time}(x)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{$x$} &
+  --- &
+  $x$ &
+  ---
+\\
+\cline{4-5}
+$\tau={\VtoTheta}_{\unit\comma\time}(V,x)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{\rule{0mm}{5mm}$\sqrt{V}$}  &
+  --- &
+  --- &
+  ---
+\\
+$V={\thetaToV}_{\unit\comma\time}(\tau,x)$ &
+  --- &
+  --- &
+  \multicolumn{2}{c|}{$\tau^2$} &
+  --- &
+  $\tau^2$ &
+  ---
+\\
+%\cline{4-5}
+%Units in each blocks&
+%  --- &
+%  --- &
+%  --- &
+%  --- &
+%  --- &
+%  --- &
+%  $\Sexpr{lz_bpf_units_per_block}$
+%\\
+\hline
+\rule{0mm}{4.5mm}effort (core mins, $U=\Sexpr{names(lz_abf_times)[1]}$) & 
+  \Sexpr{myround(lz_ubf_times[1]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abf_times[1]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abfir_times[1]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_girf_times[1]/60,1)}  & 
+  \Sexpr{myround(lz_pfilter_times[1]/60,1)} & 
+  \Sexpr{myround(lz_enkf_times[1]/60,1)} &
+  \Sexpr{myround(lz_bpf_times[1]/60,1)}
+\\
+effort  (core mins,  $U=\Sexpr{names(lz_abf_times)[2]}$) & 
+  \Sexpr{myround(lz_ubf_times[2]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abf_times[2]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abfir_times[2]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_girf_times[2]/60,1)} &
+  \Sexpr{myround(lz_pfilter_times[2]/60,1)} & 
+  \Sexpr{myround(lz_enkf_times[2]/60,1)} &
+  \Sexpr{myround(lz_bpf_times[2]/60,1)}  
+\\
+effort  (core mins,  $U=\Sexpr{names(lz_abf_times)[4]}$) & 
+  \Sexpr{myround(lz_ubf_times[4]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abf_times[4]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abfir_times[4]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_girf_times[4]/60,1)} & 
+  \Sexpr{myround(lz_pfilter_times[4]/60,1)} & 
+  \Sexpr{myround(lz_enkf_times[4]/60,1)} &
+  \Sexpr{myround(lz_bpf_times[4]/60,1)}
+\\
+effort  (core mins,  $U=\Sexpr{names(lz_abf_times)[6]}$) & 
+  \Sexpr{myround(lz_ubf_times[6]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abf_times[6]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abfir_times[6]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_girf_times[6]/60,1)} & 
+  \Sexpr{myround(lz_pfilter_times[6]/60,1)} & 
+  \Sexpr{myround(lz_enkf_times[6]/60,1)} &
+  \Sexpr{myround(lz_bpf_times[6]/60,1)}
+\\
+effort  (core mins,  $U=\Sexpr{names(lz_abf_times)[10]}$) & 
+  \Sexpr{myround(lz_ubf_times[10]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abf_times[10]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_abfir_times[10]*lz_cores/60,1)} & 
+  \Sexpr{myround(lz_girf_times[10]/60,1)} & 
+  \Sexpr{myround(lz_pfilter_times[10]/60,1)} & 
+  \Sexpr{myround(lz_enkf_times[10]/60,1)} &
+  \Sexpr{myround(lz_bpf_times[10]/60,1)}  
+\\
+\hline
+
+\end{tabular}
+\caption{Algorithmic settings for the Lorenz-96 numerical example. 
+Computational effort is measured in core minutes for running one filter, corresponding to a point on Figure~ Figure~\ref{fig:lz_loglik_plot}. 
+The time taken for computing a single point using the parallel {\UBF}, {\ABF} and {\ABFIR} implementations is the effort divided by the number of cores, here $\Sexpr{lz_cores}$.
+The time taken for computing a single point using the single-core GIRF, PF, EnKF and BPF implementations is equal to the effort in core minutes.
+}\label{tab:lz}
+\end{center}
+\end{table}
+
+
+%\FloatBarrier
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% mmmmmmmmmmmmmmmmmmmm %%%%%%%%%%%%%%
+
+
+\section{\secTitleSpace A memory-efficient representation of {\ABF}}
+
+The {\ABF} pseudocode in the main text emphasizes the logical structure of the mathematical quantities computed, rather than describing a specific implementation. 
+Arguably, an algorithm should specify not only what is to be computed, but also details of what variables should be created and saved to carry out these computations efficiently, and how computations and storage are shared across multiple locations when the algorithm is parallelized.
+We use the term algorithm to denote a higher level description of the quantities to be calculated and we will say that alternative pseudocodes arriving at the same quantities are representations of the algorithm. 
+Here, we present an alternative representations of {\ABF} which we call {\ABF}$_2$, and we refer to the representation in the main text as {\ABF}$_1$.
+The most concrete form of an algorithm is the actual computer code implementing the algorithm in a programming language.
+The implementation of {\ABF} in \texttt{spatPomp}, used for numerical results in this paper, uses an embarrassingly parallel approach based on the representation {\ABF}$_1$. 
+This strategy facilitates robust and simple parallelization, and is appropriate when memory constraints are not limiting. 
+To develop {\ABF}$_2$, we set up notation similar to that used for the mathematical theory.
+Let 
+\begin{equation}
+\gamma^{}_{\unit,\time,\rep,k}=\frac{1}{\Np}\sum_{\np=1}^{\Np}\hspace{2mm}\prod_{\altUnit:(\altUnit,\time-k)\in B_{\unit,\time}} w^M_{\altUnit,\time-k,\rep,\np}
+\end{equation}
+Also, let 
+\begin{equation}
+\gamma^{+}_{\unit,\time,\rep,0}=\frac{1}{\Np}\sum_{\np=1}^{\Np}\prod_{(\altUnit,\time)\in B^{+}_{\unit,\time}} w^M_{\altUnit,\time,\rep,\np}
+\end{equation}
+Now set $K$ to be the largest value of $k$ for which $B^{[n-k]}_{\unit,\time}$ is nontrivial for some $(\unit,\time)$, i.e., $K$ is the largest temporal lag in any neighborhood. 
+With this notation, we can write \myeqref{eq:gamma:def} as
+\begin{eqnarray*}
+\gamma^{MC,\rep}_{B_{\unit,\time}} &=& \prod_{k=0}^{K} \gamma^{}_{\unit,\time,\rep,k}
+\\
+\gamma^{MC,\rep}_{B^{+}_{\unit,\time}} &=& \gamma^{+}_{\unit,\time,\rep,0} \, \prod_{k=1}^{K} \gamma^{}_{\unit,\time,\rep,k}
+\end{eqnarray*}
+This motivates the following representation of {\ABF}.
+
+\begin{center}
+\noindent\begin{tabular}{l}
+\hline
+{\bf 
+{{\ABF}$_2$}. Adapted bagged filter, representation $2$.}\inputSpace\\
+\hline
+%{\bf input:} From Table~1 \inputSpace \\
+%\hline
+\firstLineSpace
+Initialize adapted simulation: $\myvec{X}^{\IF}_{0,\rep} \sim f_{\myvec{X}_0}(\myvec{x}_0)$
+\\
+For $\time\ \mathrm{in}\ \seq{1}{\Time}$
+\\
+\asp  Proposals:
+    $\myvec{X}_{\time,\rep,\np}^{\IP} \sim 
+    f_{\myvec{X}_{\time}|X_{1:\Unit,\time-1}} 
+    \big( \myvec{x}_{\time}\given \myvec{X}^{\IF}_{\time-1,\rep}\big)$
+\\
+\asp Measurement weights:
+  $w^M_{\unit,\time,\rep,\np} = 
+    f_{Y_{\unit,\time}|X_{\unit,\time}} 
+    \big (\data{y}_{\unit,\time}\given X^{\IP}_{\unit,\time,\rep,\np}\big)$
+\\
+\asp  Adapted resampling weights:
+  $w^{\IF}_{\time,\rep,\np} = 
+    \prod_{\unit=1}^{\Unit} w^M_{\unit,\time,\rep,\np}$
+\\
+\asp
+      Resampling:
+        $\prob\big[\resampleIndex({\rep})=a \big] = w^{\IF}_{\time,\rep,a}
+  \Big( 
+  \sum_{\altNp=1}^{\Np} w^{\IF}_{\time,\rep,\altNp}
+  \Big)^{-1}$
+\\
+\asp 
+$\myvec{X}^{\IF}_{\time,\rep} = \myvec{X}^{\IP}_{\time,\rep,r(\rep)}$ 
+\\
+\asp Compute $\gamma^{}_{\unit,\time+k,\rep,k}$  for $k\ \mathrm{in}\ \seq{0}{K}$,
+\\
+\asp Compute $\gamma^{+}_{\unit,\time,\rep,0}$
+\\
+End for
+\\
+$\displaystyle \MC{\loglik}_{\unit,\time}= 
+\log\Bigg(
+\frac{
+\sum_{\rep=1}^\Rep \gamma^{+}_{\unit,\time,\rep,0}\prod_{k=1}^K
+\gamma^{}_{\unit,\time,\rep,k}
+}{
+\sum_{\rep=1}^\Rep \prod_{k=0}^K
+\gamma^{}_{\unit,\time,\rep,k}
+}
+\Bigg)
+$
+\vspace{1mm}
+\\
+\hline
+\end{tabular}
+\end{center}
+
+It is clearer from the {\ABF}$_2$ representation than from the {\ABF}$_1$ representation that we do not have to save every individual particle and its weight $w^M_{\unit,\time,\rep,\np}$ after the quantities $\myvec{X}^A_{\time,\rep}$, $\gamma^{}_{\unit,\time+k,\rep,k}$ and $\gamma^{+}_{\unit,\time,\rep,0}$ have been computed.
+{\ABF}$_2$ has an embarrassingly parallel implementation, since the replicates do not need to interact until  they are combined to compute $\displaystyle \MC{\loglik}_{\unit,\time}$.
+An embarrassingly parallel implementation therefore requires $O\big(\Unit(K\Time+\Np)\big)$ memory for each replicate, and $O\big(\Unit\Time \Rep K\big)$ memory when the results from each replicate are collected together.
+
+By using additional communication, for example when the implementation is designed for a single core or multiple cores with shared memory, it is possible to further reduce the memory requirement.
+At time $\time$, we need to save only $\myvec{X}^A_{\time,\rep}$ and $\gamma^{}_{\unit,\time-K:\time+K,\rep,k}$ to compute $\displaystyle \MC{\loglik}_{\unit,\time}$ and all subsequent quantities.
+Computing  $\myvec{X}^A_{\time,\rep}$ requires $O(\Unit\Np)$ storage.
+Therefore, {\ABF} can be implemented with memory requirement $O\big(\Unit (K\Rep+\Np) \big)$, independent of $\Time$.
+
+
+\bibliography{bib-iif}
+
+\end{document}
+
