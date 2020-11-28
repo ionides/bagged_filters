@@ -1,3 +1,4 @@
-# IIF #
+# Bagged filters #
 
-This project develops material investigating IIF algorithms and hopefully heading toward a manuscript 
+This project develops material investigating bagged particle filter algorithms
+
