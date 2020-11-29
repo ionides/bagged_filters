@@ -5,12 +5,11 @@
 \pdfminorversion=4
  
 <<debug,echo=F>>=
-run_level <- 2
-#run_level <- "jasa-sept-2020"
+run_level <- 1
 #run_level <- 2
+#run_level <- "jasa-sept-2020"
 bm_run_level <- run_level
-#mscale_run_level <- run_level
-mscale_run_level <- 3
+mscale_run_level <- run_level
 slice_run_level <- run_level
 
 if(run_level=="jasa-sept-2020"){  
