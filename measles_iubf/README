@@ -1,0 +1,29 @@
+To run measles IUBF to get the parameter estimates and their likelihoods:
+
+sbatch  ./bash/a-go.sbat
+
+What does this do?
+As you can see from reading a-go.sbat we eventually run a shell script that allows us
+to run ./analyses/iubf_run.R at a run level that can be specified within the sbat file.
+Run level 3 is for U=20, N=8*26
+
+Current copy of the sbat file (Nrep=30000):
+#!/bin/sh
+#SBATCH --job-name=ar_iubf_u10n8_2   # Job name
+#SBATCH --array=1-36
+#SBATCH --mail-type=ARRAY_TASKS
+#SBATCH --mail-user=kasfaw@umich.edu
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=25
+#SBATCH --mem=160gb
+#SBATCH --time=200:00:00            # Time limit hrs:min:sec
+#SBATCH --account=ionides2
+#SBATCH --partition=standard
+
+# Print the task id.
+echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
+
+# Bash script is where run level is specified
+bash run_measles_iubf.sh 3 
+
+

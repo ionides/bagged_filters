@@ -109,12 +109,24 @@ V < \ThmOneVarBound.
 \newcommand\Bi{
 
 \begin{assumptionB}\label{B1}
-  There is an $\ethree>0$, independent of $\Unit$ and $\Time$, and a collection of neighborhoods $\{B_{\unit\comma\time}\subset A_{\unit\comma\time}, \unit\in 1\mycolon\Unit,\time\in 1\mycolon\Time\}$ such that the following holds for all $\unit$ and $\time$, and any bounded real-valued function $|h(x)|\le 1$\emph{:} if we write $A=A_{u,n}$, $B=B_{u,n}$, $f_{A}(x_A) = f_{Y_{A}|X_{A}}(\data y_{A}|x_A)$, and $f_{B}(x_B) = f_{Y_{B}|X_{B}}(\data y_{B}|x_B)$,
+  There is an $\ethree>0$, independent of $\Unit$ and $\Time$, and a collection of neighborhoods $\{B_{\unit\comma\time}\subset A_{\unit\comma\time}, \unit\in 1\mycolon\Unit,\time\in 1\mycolon\Time\}$ such that the following holds for all $\unit$ and $\time$, and any bounded real-valued function $|h(x)|\le 1$.
+  Setting $A=A_{u,n}$, $B=B_{u,n}$, $f_{A}(x_A) = f_{Y_{A}|X_{A}}(\data y_{A}|x_A)$, and $f_{B}(x_B) = f_{Y_{B}|X_{B}}(\data y_{B}|x_B)$, so that we have the identity
+    \[
+    f_{X_{u,n}|Y_A}(x | \data{y}_A) = 
+    \frac{
+      \E_{g} \! \big[ 
+      f_{A}\big(X_{A}^P\big) f_{X_{u,n}|X_{A^{[n]}},\myvec X_{n-1}} \big(x | X_{A^{[n]}}^P, \myvec X_{n-1}\big) 
+      \big]
+    } {
+      \E_{g} \! \big[f_A\big(X_A^P\big)\big]
+    },
+  \]
+we require that
 %\begin{equation}
 \begin{eqnarray}
 \nonumber
-%\label{asif:eq:weak_coupling2}
-&&\hspace{-7mm}
+%\label{abf:eq:weak_coupling2}
+&&\hspace{-30mm}
 \left| 
 \int \hspace{-1mm} h(x)
 \left\{
@@ -146,7 +158,7 @@ V < \ThmOneVarBound.
 \right\}
 \!
 dx
-\right| \hspace{0mm} < \hspace{0mm} \ethree.
+\right| \hspace{1mm} < \hspace{1mm} \ethree.
 %\end{equation}
 \end{eqnarray}
 \end{assumptionB}
@@ -171,7 +183,7 @@ $Q^{-1} <f_{Y_{\unit\comma\time}|X_{\unit\comma\time}}(\data{y}_{\unit\comma\tim
 
 \newcommand\BivA{
 \begin{assumptionB}\label{B:unconditional:mix}
-Define $g_{{X}_{A}|{X}_{B}}$ via \myeqref{eq:g}.
+  We use subscripts of $g$ to denote marginal and conditional densities derived from \myeqref{eq:g}.
 Suppose there is an $\efourA$, independent of $\Unit$ and $\Time$, such that the following holds.
 For each $\unit$ and $\time$, a set $\altB^{}_{\unit\comma\time} \subset (1\mycolon U)\times(0\mycolon N)$ exists such that $(\altUnit, \altTime) \notin \altB_{\unit\comma\time}$ implies $B_{\unit\comma\time}^+ \cap B_{\altUnit\comma\altTime}^+ = \emptyset$ and
 %      \begin{eqnarray} 
@@ -179,14 +191,14 @@ For each $\unit$ and $\time$, a set $\altB^{}_{\unit\comma\time} \subset (1\myco
 \begin{equation}
 \nonumber
 \big| 
-   g^{}_{{X}^{P}_{B^{}_{\altUnit\comma\altTime}}{X}^{P}_{B^{}_{\unit\comma\time}}} 
-   - g^{}_{{X}^{P}_{B^{}_{\altUnit\comma\altTime}}} \, g^{}_{{X}^{P}_{B^{}_{\unit\comma\time}}} 
+   g^{}_{{X}^{P}_{B^{}_{\altUnit\comma\altTime} \cup B^{}_{\unit\comma\time}}} 
+   - g^{}_{{X}^{P}_{B^{}_{\altUnit\comma\altTime}}} \, g^{}_{{X}^{P}_{B^{}_{\unit\comma\time}}}
 \big|
 <
 %&\hspace{-3mm}<\hspace{-3mm} & 
 %\\
 %&&\hspace{-30mm}
-(1/2) \, \efourA \, \,  g^{}_{{X}^{P}_{B^{}_{\altUnit\comma\altTime}}} \, g^{}_{{X}^{P}_{B^{}_{\unit\comma\time}}}
+(1/2) \, \efourA \, \,  g^{}_{{X}^{P}_{{B^{}_{\altUnit\comma\altTime}} \cup {B^{}_{\unit\comma\time}}}}
 %\\
 %\label{eq:B:unconditional:mix:2}
 \end{equation}
@@ -196,7 +208,7 @@ For each $\unit$ and $\time$, a set $\altB^{}_{\unit\comma\time} \subset (1\myco
 g^{}_{X^P_{B^{}_{\altUnit\comma\altTime}}|\myvec{X}_{0:\Time}} 
 \, g^{}_{X^P_{B^{}_{\unit\comma\time}}|\myvec{X}_{0:\Time}} 
 -
-g^{}_{X^P_{B^{}_{\altUnit\comma\altTime}},X^P_{B^{}_{\unit\comma\time}}|\myvec{X}_{0:\Time}}
+g^{}_{X^P_{B^{}_{\altUnit\comma\altTime} \cup B^{}_{\unit\comma\time}}|\myvec{X}_{0:\Time}}
 \big|
 &&
 %&\hspace{-3mm}<\hspace{-3mm}& 
@@ -204,7 +216,7 @@ g^{}_{X^P_{B^{}_{\altUnit\comma\altTime}},X^P_{B^{}_{\unit\comma\time}}|\myvec{X
 \nonumber
 %&&\hspace{-30mm}(1/2) \, \efourA \, \, 
 &&\hspace{-30mm} < (1/2) \, \efourA \, \, 
- g^{}_{X^P_{B^{}_{\altUnit\comma\altTime}},X^P_{B^{}_{\unit\comma\time}}|\myvec{X}_{0:\Time}}
+ g^{}_{X^P_{B^{}_{\altUnit\comma\altTime} \cup B^{}_{\unit\comma\time}}|\myvec{X}_{0:\Time}}
       \end{eqnarray}
       Further, there is a uniform bound $|\altB_{\unit\comma\time}| \le \altb$.
 \end{assumptionB}
@@ -238,11 +250,10 @@ There is a constant $\BvConstant(\Unit,\Time,\Ninter)$ such that, for all $\efiv
 \begin{equation}
 \nonumber
 \hspace{-0.5mm}
+\EMC
 \left|  
 \, 
-  \EMC\Big[ 
     \frac{1}{\Np} \sum_{\np=1}^{\Np} h(\myvec{X}^{\GR}_{\time,\Ninter,\np,\rep}) 
-   \Big] \!
 -  \E_g \! \big[h(\myvec{X}_\time)\given \myvec{X}_{\time-1}=\myvec{x}^{\IF}_{\time-1,\Ninter,\rep}\big] 
 \right| \!
 < \efive^{}.
@@ -258,7 +269,7 @@ For $1\leq \time \leq N$, the Monte Carlo random variable $X^A_{\time,i}$ is ind
 
 
 \newcommand\TheoremII{
-\begin{theorem}  \label{thm:asif}
+\begin{theorem}  \label{thm:abf}
 Let $\MC{\loglik}$ denote the Monte Carlo likelihood approximation constructed by {\ABFIR}, or by {\ABF} since this is the special case of {\ABFIR} with $\Ninter=1$.
 Consider a limit with a growing number of bootstrap replicates, $\Rep\to\infty$, and suppose assumptions~\ref{B1},~\ref{B1b}, \ref{B2}, \ref{B:temporal:mix}, \ref{B:girf} and~\ref{B:XG_XA_ind}. 
 Suppose the number of particles $\Np$ exceeds the requirement for~\ref{B:girf}.
@@ -267,7 +278,7 @@ Q^2\ethree + 2 Q^{2\Bsize}\big(\boundLemmaUniform\big)$
 and $V<Q^{4\Bsize}\Unit^2\Time^2$ 
 such that
 \begin{equation}
-\siOnly{\label{th:asif:lik:bound}}
+\siOnly{\label{th:abf:lik:bound}}
 \msOnly{\nonumber}
 \Rep^{1/2}
   \big[ 
@@ -278,7 +289,7 @@ such that
 \end{equation}
 If additionally Assumption~\ref{B:unconditional:mix} holds, we obtain an improved rate of
 \begin{equation}
-\siOnly{\label{th:asif:lik:bound2}}
+\siOnly{\label{th:abf:lik:bound2}}
 \msOnly{\nonumber}
 V < Q^{4\Bsize}\Time\Unit
 \big\{ c + \big(\boundOffDiagonal \big) \big(\Time\Unit-c\big)

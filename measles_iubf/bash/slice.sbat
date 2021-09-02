@@ -1,0 +1,17 @@
+#!/bin/sh
+#SBATCH --job-name=slice_u10n8   # Job name
+#SBATCH --mail-type=ALL         # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=kasfaw@umich.edu # Where to send mail	
+#SBATCH --nodes=1                   # Use one node
+#SBATCH --ntasks=30                  # Run a single task
+#SBATCH --mem=50gb           # Memory per processor
+#SBATCH --time=40:00:00            # Time limit hrs:min:sec
+#SBATCH --account=ionides1
+#SBATCH --partition=standard
+
+# Print the task id.
+# echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
+
+Rscript ../analyses/abf_slice_10/abf_slice_g.R
+Rscript ../analyses/abf_slice_10/abf_slice_R0.R
+Rscript ../analyses/abf_slice_10/abf_slice_psi.R
