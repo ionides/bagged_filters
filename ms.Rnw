@@ -202,11 +202,15 @@ A block particle filter also performs well on this task, though the bagged filte
 \noindent%
 {\it Keywords:}  Particle filter; Sequential Monte Carlo; Markov process; Population dynamics
 
+\vspace{3mm}
+
+\noindent This document is a reproducible version of \citet{ionides21} compiled on \today, using R version \Sexpr{getRversion()}, \code{pomp} version \Sexpr{packageVersion("pomp")} and \code{spatPomp} version \Sexpr{packageVersion("spatPomp")}.
+
 %\vfill
 \pagebreak
 
-\spacingset{1.45} % DON'T change the spacing!
-
+%\spacingset{1.45} % DON'T change the spacing!
+\spacingset{1}
 
 \section{Introduction}
 
@@ -2020,25 +2024,25 @@ foreach (slice_row=1:nrow(slice_enkf_sliceJobs), .combine=rbind) %dopar% {
 
 <<slice_mcap,eval=T,echo=F>>=
 
-slice_abf_mcap <- panelPomp::mcap(
+slice_abf_mcap <- mcap(
   lp=slice_abf_results[,"logLik"],
   parameter=slice_abf_results[,"g"],
   lambda = 1
 )
 
-slice_ubf_mcap <- panelPomp::mcap(
+slice_ubf_mcap <- mcap(
   lp=slice_ubf_results[,"logLik"],
   parameter=slice_ubf_results[,"g"],
   lambda = 0.8
 )
 
-slice_bpf_mcap <- panelPomp::mcap(
+slice_bpf_mcap <- mcap(
   lp=slice_bpf_results[,"logLik"],
   parameter=slice_bpf_results[,"g"],
   lambda = 1
 )
 
-slice_enkf_mcap <- panelPomp::mcap(
+slice_enkf_mcap <- mcap(
   lp=slice_enkf_results[,"logLik"],
   parameter=slice_enkf_results[,"g"],
   lambda = 1

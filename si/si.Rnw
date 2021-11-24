@@ -167,7 +167,8 @@ myround<- function (x, digits = 1) {
 %% Comment/remove this line before generating final copy for submission 
 %\instructionspage  
 
-\date{\today}
+%\date{\today}
+\date{}
 \title{Supplement to ``{\mytitle}''}
 \author{E. L. Ionides, K. Asfaw, J. Park and A. A. King}
 
@@ -198,6 +199,11 @@ myround<- function (x, digits = 1) {
 %Draft: \today
 
 \tableofcontents
+
+\vspace{5mm}
+
+\noindent This document is a reproducible version of the supplement to \citet{ionides21} compiled on \today, using R version \Sexpr{getRversion()}, \code{pomp} version \Sexpr{packageVersion("pomp")} and \code{spatPomp} version \Sexpr{packageVersion("spatPomp")}.
+
 
 \newpage
 
