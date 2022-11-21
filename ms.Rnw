@@ -6,8 +6,8 @@
  
 <<debug,echo=F>>=
 # run_level <- "jasa-sept-2020"
- run_level <- "manual"
-# run_level <- 2
+# run_level <- "manual"
+ run_level <- 1
 
 if(is.numeric(run_level)){
   bm_run_level <- run_level
@@ -1008,15 +1008,13 @@ bm_kf <- stew(file=paste0(bm_files_dir,"bm_kf.rda"),seed=25487,{
       }
     }
     rootQ <- coef(bm)["rho"]^bm_dmat * coef(bm)["sigma"]
-    kf <- pomp:::kalmanFilter(
-      t=1:bm_N,
-      y=obs(bm),
+    kf <- pomp:::kalmanFilter(bm,
       X0=rinit(bm),
       A= diag(bm_units),
       Q= rootQ %*% rootQ,
       C=diag(bm_units),
       R=diag(coef(bm)["tau"]^2, nrow=bm_units)
-    )$loglik
+    )$logLik
   } -> bm_kf_results
 })
 
@@ -2025,34 +2023,34 @@ foreach (slice_row=1:nrow(slice_enkf_sliceJobs), .combine=rbind) %dopar% {
 <<slice_mcap,eval=T,echo=F>>=
 
 slice_abf_mcap <- mcap(
-  lp=slice_abf_results[,"logLik"],
+  logLik=slice_abf_results[,"logLik"],
   parameter=slice_abf_results[,"g"],
-  lambda = 1
+  span = 1
 )
 
 slice_ubf_mcap <- mcap(
-  lp=slice_ubf_results[,"logLik"],
+  logLik=slice_ubf_results[,"logLik"],
   parameter=slice_ubf_results[,"g"],
-  lambda = 0.8
+  span = 0.8
 )
 
 slice_bpf_mcap <- mcap(
-  lp=slice_bpf_results[,"logLik"],
+  logLik=slice_bpf_results[,"logLik"],
   parameter=slice_bpf_results[,"g"],
-  lambda = 1
+  span = 1
 )
 
 slice_enkf_mcap <- mcap(
-  lp=slice_enkf_results[,"logLik"],
+  logLik=slice_enkf_results[,"logLik"],
   parameter=slice_enkf_results[,"g"],
-  lambda = 1
+  span = 1
 )
 
   
 plot.profile2 <- function(mcap1,ylab,xline=2.5,yline=2.5,xlab="",quadratic=FALSE,...){
   if(missing(ylab)) ylab <- "log likelihood"
   # par(mai=c(0.7,0.7,0.3,0.3))
-  ggplot() + geom_point(aes(x = mcap1$parameter, y = mcap1$lp)) + 
+  ggplot() + geom_point(aes(x = mcap1$parameter, y = mcap1$logLik)) + 
     geom_line(mapping = aes(x = mcap1$fit$parameter, y = mcap1$fit$smoothed),
               color = "red") +
     {if(quadratic) geom_line(mapping = aes(x = mcap1$fit$parameter, y = mcap1$fit$quadratic),
@@ -2116,7 +2114,7 @@ plot.profile2(slice_ubf_mcap,xlab="G", quadratic = FALSE) +
 
 plot.profile <- function(mcap1,ylab,xline=2.5,yline=2.5,xlab="",...){
   if(missing(ylab)) ylab <- "log likelihood"
-  plot(mcap1$lp ~ mcap1$parameter, xlab="",ylab="",xaxt="n",...)
+  plot(mcap1$logLik ~ mcap1$parameter, xlab="",ylab="",xaxt="n",...)
   mtext(side=2,text=ylab,line=yline)
   mtext(side=1,text=xlab,line=yline)
   lines(mcap1$fit$parameter,mcap1$fit$smoothed, col = "red", lwd = 1.5)
@@ -2137,7 +2135,7 @@ abline(v=measles_params["g"],col="blue",lty="dashed")
 yloc <- 0.05; xloc <- 570
 mtext("A",side=2,line=2.5,las=1,padj=-4,cex=1.8)
 text(xloc,
-  (1-yloc)*min(slice_abf_mcap$lp) + yloc*max(slice_abf_mcap$lp),
+  (1-yloc)*min(slice_abf_mcap$logLik) + yloc*max(slice_abf_mcap$logLik),
   cex=1.4,"ABF")
 
 plot.profile(slice_bpf_mcap,xlab="")
@@ -2146,7 +2144,7 @@ abline(v=measles_params["g"],col="blue",lty="dashed")
 
 mtext("B",side=2,line=2.5,las=1,padj=-4,cex=1.8)
 text(xloc,
-  (1-yloc)*min(slice_bpf_mcap$lp) + yloc*max(slice_bpf_mcap$lp),
+  (1-yloc)*min(slice_bpf_mcap$logLik) + yloc*max(slice_bpf_mcap$logLik),
   cex=1.4,"BPF")
 
 
@@ -2157,7 +2155,7 @@ abline(v=measles_params["g"],col="blue",lty="dashed")
 mtext("C",side=2,line=2.5,las=1,padj=-4,cex=1.8)
 mtext("G",side=1,line=2.5)
 text(xloc,
-  (1-yloc)*min(slice_enkf_mcap$lp) + yloc*max(slice_enkf_mcap$lp),
+  (1-yloc)*min(slice_enkf_mcap$logLik) + yloc*max(slice_enkf_mcap$logLik),
   cex=1.4,"EnKF")
 
 @
@@ -2192,7 +2190,7 @@ colnames(g_prof) <- c('g', 'loglik', 'loglik_se')
 
 plot.profile <- function(mcap1,ylab,xline=2.5,yline=2.5,xlab="",quadratic=FALSE,...){
    if(missing(ylab)) ylab <- "profile log likelihood"
-   ggplot() + geom_point(aes(x = mcap1$parameter, y = mcap1$lp), shape = 1) +
+   ggplot() + geom_point(aes(x = mcap1$parameter, y = mcap1$logLik), shape = 1) +
       geom_line(mapping = aes(x = mcap1$fit$parameter, y = mcap1$fit$smoothed),
                 color = "red") +
       {if(quadratic) geom_line(mapping = aes(x = mcap1$fit$parameter, y = mcap1$fit$quadratic),
@@ -2206,10 +2204,10 @@ plot.profile <- function(mcap1,ylab,xline=2.5,yline=2.5,xlab="",quadratic=FALSE,
 g_prof %>% dplyr::group_by(g) %>% dplyr::filter(loglik==min(loglik)) -> mins
 g_prof[which(!(g_prof$loglik %in% mins$loglik)),] -> top_g_prof
 
-g_prof_mcap <- spatPomp::mcap(
-   lp=top_g_prof[,"loglik"],
+g_prof_mcap <- pomp::mcap(
+   logLik=top_g_prof[,"loglik"],
    parameter=top_g_prof[,"g"],
-   lambda = 0.90
+   span = 0.90
 )
 plot.profile(g_prof_mcap,xlab='G', quadratic = FALSE) +
    geom_vline(xintercept=400,color="blue",linetype="dashed") +
